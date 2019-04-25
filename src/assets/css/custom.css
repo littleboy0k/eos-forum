@@ -34,6 +34,23 @@
 
 /*-----------------------------------------------------------------*/
 /*--- General ---*/
+@media screen and (max-width: 991px) {
+    .mobile {
+        display: block;
+    }
+    .desktop {
+        display: none;
+    }
+}
+@media screen and (min-width: 992px) {
+    .mobile {
+        display: none;
+    }
+    .desktop {
+        display: block;
+    }
+}
+
 
 html {
     overflow-y: overlay;
@@ -49,18 +66,38 @@ body {
 a {
     color: #363838;
 }
-a:hover {
-    color: #989c9e;
+
+.link:hover {
+    color: #0056b3!important;
+    text-decoration: underline!important;
+}
+
+
+.capitalize {
+    text-transform: capitalize;
 }
 
 .hidden {
     display: none;
 }
 
+.flex {
+    display: flex;
+}
+
 .flex-center {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
+}
+
+.flex-column {
+    display: flex;
+    flex-direction: column;
+}
+
+.disabled {
+    pointer-events: none;
 }
 
 /*-----------------------------------------------------------------*/
@@ -102,9 +139,12 @@ ul.socialicons li a:hover {
 }
 
 .HeaderNavigation {
-    /* height: 70px; */
+    height: 55px;
     background-color: white;
     border-bottom: 1px solid #c9cccd;
+    position: sticky;
+    top: -1px;
+    z-index: 1;
 }
 
 .ConnectButton {
@@ -204,8 +244,19 @@ ul.socialicons li a:hover {
 
 
 /*--- Sidebar ---*/
-
+@media screen and (max-width: 991px) {
+    .sidebarblock {
+        position: initial!important;
+    }
+}
 .sidebarblock {
+    max-height: calc(100vh - 55px - 15px);
+    overflow: auto;
+    position: sticky;
+    top: 60px;
+}
+
+.sidebarblock .block {
     background-color: #ffffff;
     border-radius: 2px;
     box-shadow: 0 1px 2px #c9cccd;
@@ -346,13 +397,16 @@ td.chbox {
 }
 
 .post {
+    background-color: white;
+}
+.post-parent {
     background-color: #ffffff;
     margin-bottom: 20px;
     padding: 1px;
 }
 
 .post-parent {
-    max-height: 300px;
+    max-height: 400px;
     overflow: hidden;
     position: relative;
     padding-bottom: 25px;
@@ -361,12 +415,12 @@ td.chbox {
 .post-parent .postinfobot {
     position: absolute;
     bottom: 0px;
-    z-index: 1;
+    z-index: 0;
     background-color: white;
     width: 100%;
 }
 
-.post-parent .posttext {
+.post-parent .title {
     pointer-events: none!important;
 }
 
@@ -374,15 +428,15 @@ td.chbox {
     content: '';
     height: 80px;
     position: absolute;
-    bottom: 0;
+    top: 300px;
     left: 0;
     width: 100%;
-    background-image: linear-gradient(transparent, white);
+    background-image: linear-gradient(rgba(255,255,255,0) 0%, white);
     display: flex;
     justify-content: center;
     align-items: center;
 }
-.post-container .post-parent.post:hover {
+.post-container .post-parent.post:hover, .notification.post:hover {
     outline: 1px solid grey;
     cursor: pointer;
 }
@@ -391,7 +445,7 @@ td.chbox {
     width: 65px;
 }
 .post-child.post {
-    margin-left: 15px;
+    margin-left: 0px;
     position: relative;
 }
 
@@ -408,25 +462,33 @@ td.chbox {
     width: 85%;
 }
 
-.post .userinfo {
-    width: 15%;
-    padding: 20px 0 15px 15px;
+.post.post-parent {
+    padding-bottom: 20px;
+}
+.post {
+    padding: 20px 20px 0px 15px;
 }
 
+.post img {
+    max-width: 100%;
+}
+.hide-preview {
+    padding-bottom: 0 !important;
+}
+.hide-preview .posttext {
+    display: none;
+}
+
+.hide-preview .postinfobot {
+    position: static;
+}
 .post .posttext {
-    width: 85%;
-    padding-right: 30px;
-    padding-top: 20px;
-    padding-bottom: 15px;
+    width: 100%;
     word-wrap: break-word;
-    color: #989c9e;
+    color: black;
     font-size: 14px;
     font-family: 'Open Sans Light', sans-serif;
     line-height: 25px;
-}
-
-.post .posttext img {
-    width: 100%;
 }
 
 .post .posttext .title {
@@ -572,19 +634,16 @@ td.chbox {
 
 .postinfobot .prev a {
     font-size: 18px;
-    color: #bdc3c7;
 }
 
 .postinfobot .posted {
     margin-left: 18px;
     font-size: 12px;
-    color: #bdc3c7;
     font-family: 'Open Sans Regular', sans-serif;
 }
 
 .postinfobot .posted i {
     font-size: 18px;
-    color: #bdc3c7;
     padding-right: 8px;
 }
 
@@ -595,7 +654,6 @@ td.chbox {
 
 .postinfobot .next a {
     font-size: 18px;
-    color: #bdc3c7;
 }
 
 .postinfobot .next a i {
@@ -696,21 +754,20 @@ a.down:hover {
 
 .btn-primary {
     background-color: #1abc9c;
-    box-shadow: none;
-    border-radius: 2px;
-    padding: 10px 15px;
-    color: #ffffff;
-    font-size: 14px;
-    font-family: 'Open Sans Bold', sans-serif;
-    border: none;
+    border-color: #1abc9c;
 
+}
+
+.btn-outline {
+    background-color: transparent;
+    border: 1px solid grey;
 }
 
 .btn-primary:hover,
 .btn-primary:active,
 .btn-primary:focus {
-    border: none;
-    background-color: #20e1bb;
+    border-color: transparent;
+    background-color: #20e1bb!important;
     box-shadow: none;
 }
 
@@ -959,199 +1016,4 @@ a.down:hover {
 
 .accsection input[type=password] {
     margin-bottom: 0;
-}
-
-
-/*-----------------------------------------------------------------*/
-/*--- Extra small devices (less 767px) ---*/
-
-@media (max-width: 767px) {
-
-    /*--- index.html ---*/
-
-    .post .userinfo {
-        width: 30%;
-        padding: 15px 0 15px 15px;
-    }
-
-    .post .posttext {
-        width: 70%;
-        padding-right: 15px;
-        padding-top: 15px;
-        padding-bottom: 15px;
-    }
-
-    .post .comments .commentbg {
-        font-size: 12px;
-        padding: 7px;
-        min-width: 35px;
-    }
-    .post .time i {
-        display: block;
-        margin-top: 5px;
-    }
-
-    .post .views i {
-        display: block;
-        margin-top: 5px;
-    }
-
-    .post .comments .commentbg .mark {
-        left: 36%;
-    }
-
-    .post .time,
-    .post .views,
-    .post .views {
-    }
-
-    .avatar .dropdown-menu {
-        left: auto;
-        right: 0;
-    }
-
-    .dropdown.avatar .status {
-        right: 14px;
-    }
-
-    .dropdown.avatar b.caret {
-        color: #363838;
-    }
-
-    .sociconcent {
-        text-align: center;
-    }
-
-    /*--- 02_topic.html ---*/
-
-    .postinfobot {
-        padding: 10px;
-    }
-
-    .postinfobot .likeblock {
-        width: 100%;
-    }
-
-    .postinfobot .posted {
-        margin: 0;
-    }
-
-    .postinfobot .next {
-        width: 76px;
-        margin: 0;
-    }
-
-    .textwraper textarea {
-        width: 175px;
-    }
-
-    footer ul.socialicons {
-        margin: 0;
-        padding: 0;
-    }
-    /* end 2*/
-
-    /*--- 03_new_topic.html ---*/
-    #pass {
-        margin-bottom: 20px;
-    }
-
-    .accsection .htext,
-    .accsection .hnotice {
-        width: 100%;
-    }
-
-    .accsection .hnotice {
-        font-size: 10px;
-    }
-
-    .postinfobot .lblfch {
-        width: 80%;
-    }
-    .postinfobot .lblfch label {
-        line-height: normal;
-        padding-top: 15px;
-        padding-bottom: 15px;
-
-    }
-    /* end 3 */
-}
-
-
-/*-----------------------------------------------------------------*/
-/*--- Small devices (768 - 991px) ---*/
-
-@media (min-width: 768px) and (max-width: 991px) {
-
-    .post .userinfo {
-        width: 10%;
-        padding: 15px 0 15px 15px;
-    }
-
-    .post .posttext {
-        width: 85%;
-        padding-right: 15px;
-        padding-top: 15px;
-        padding-bottom: 15px;
-    }
-
-    .post .comments .commentbg {
-        font-size: 12px;
-        padding: 7px;
-        min-width: 35px;
-    }
-    .post .time i {
-        display: block;
-        margin-top: 5px;
-    }
-
-    .post .views i {
-        display: block;
-        margin-top: 5px;
-    }
-
-    .post .comments .commentbg .mark {
-        left: 36%;
-    }
-
-    .avatar .dropdown-menu {
-        left: auto;
-        right: 0;
-    }
-
-    .dropdown.avatar .status {
-        right: 14px;
-    }
-
-    .dropdown.avatar b.caret {
-        color: #363838;
-    }
-
-}
-
-
-/*-----------------------------------------------------------------*/
-/*--- Medium devices (992-1200px) ---*/
-@media (min-width: 992px) and (max-width: 1200px) {
-
-    .avatar .dropdown-menu {
-        left: auto;
-        right: 0;
-    }
-    ul.socialicons {
-        margin-bottom: 0;
-    }
-
-    /* 2 */
-    .textwraper textarea {
-
-        width: 100%;
-    }
-    /* end 2 */
-}
-
-
-/*-----------------------------------------------------------------*/
-/*--- Large devices (more 1200px) ---*/
-@media (min-width: 1201px) {
 }

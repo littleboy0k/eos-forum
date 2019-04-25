@@ -1,5 +1,5 @@
 <template>
-  <div class="modal">
+  <div class="modal" >
     <div class="body">
       <slot />
     </div>
@@ -30,16 +30,10 @@ export default {
     position: fixed;
     top:0;
     left:0;
-    z-index: 1;
-    align-items: center;
+    z-index: 999;
     justify-content: center;
-    background-color: rgba(0,0,0,0.5);
-    display: flex !important;
+    background-color: rgba(0,0,0,0.65);
+    display: flex;
+    overflow-y: auto;
   }
-  .body {
-    overflow: auto;
-  }
-  /* .body {
-    width: 80vw;
-  } */
 </style>

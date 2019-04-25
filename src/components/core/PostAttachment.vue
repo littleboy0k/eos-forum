@@ -4,7 +4,11 @@
     :class="this.collapse ? 'row collapse' : 'row'">
 
     <div class="col-md-12">
-      <div v-if="iframe">
+      <Tweet v-if="twitterID" :id="twitterID" />
+      <div v-else-if="telegramID" :id="random_id + '-telegram'">
+        <!-- append -->
+      </div>
+      <div v-else-if="iframe" class="text-center">
         <iframe :src="this.show_iframe ? attachment.value : ''"
           style="max-width: 100%"
           :height="attachment.height"
@@ -14,24 +18,23 @@
           allowfullscreen>
         </iframe>
       </div>
-      <div v-if="img">
-        <a :href="attachment.value">
-          <img :src="attachment.value">
-        </a>
+      <div v-else-if="markdown">
+        <p v-html="markdown_html"></p>
       </div>
-      <div v-if="mp4">
-        <video style="width: 100%" controls>
+      <div v-else-if="img">
+        <img class="limit-height" :src="attachment.value">
+      </div>
+      <div v-else-if="mp4" class="text-center">
+        <video class="limit-height" controls>
           <source :src="attachment.value" type="video/mp4">
         </video>
       </div>
-
-      <div v-if="mp3">
-        <audio style="width: 100%" controls>
+      <div v-else-if="mp3">
+        <audio class="limit-height" controls>
           <source :src="attachment.value" type="audio/mpeg">
         </audio>
       </div>
-
-      <div v-if="link">
+      <div v-else-if="link">
         <div>
           <a target="_blank" :href="attachment.value">{{attachment.value}}</a>
         </div>
@@ -41,8 +44,15 @@
 </template>
 
 <script>
+import { Tweet } from "vue-tweet-embed";
+import { MarkdownParser } from "@/markdown";
+import telegram from "@/telegram";
+
 export default {
   name: "PostAttachment",
+  components: {
+    Tweet
+  },
   props: {
     attachment: {
       type: Object,
@@ -60,10 +70,45 @@ export default {
   },
   async mounted() {
     this.show_iframe = !this.collapse;
+
+    // unfortunately, there's no vue component for this :(
+    if (this.telegramID) {
+      var child = document.getElementById(this.random_id + "-telegram");
+      var script = document.createElement("script");
+      script.setAttribute("data-telegram-post", this.telegramID);
+      script.setAttribute("data-telegram-rn", this.random_id);
+      script.setAttribute("data-width", "100%");
+      child.appendChild(script);
+
+      telegram(window);
+    }
   },
   computed: {
+    twitterID() {
+      if (this.attachment.value.includes("twitframe.com/show")) {
+        const s = this.attachment.value.match(/status\/[0-9]+/);
+        if (s && s.length > 0) {
+          return s[0].split("/")[1];
+        }
+      }
+      return "";
+    },
+    telegramID() {
+      if (this.attachment.type == "url") {
+        const t_me = "://t.me/";
+        const t_me_i = this.attachment.value.indexOf(t_me);
+        if (t_me_i > -1) {
+          const s = this.attachment.value.substring(t_me_i + t_me.length);
+          return s;
+        }
+      }
+      return "";
+    },
     iframe() {
-      return this.hasAttachment("iframe");
+      return (
+        this.hasAttachment("iframe") &&
+        !this.attachment.value.includes("twitframe.com/show")
+      );
     },
     img() {
       return this.hasAttachment("img");
@@ -76,6 +121,13 @@ export default {
     },
     link() {
       return this.hasAttachment("link");
+    },
+    markdown() {
+      return this.hasAttachment("markdown");
+    },
+    markdown_html() {
+      var md = new MarkdownParser(this.attachment.value);
+      return md.html;
     },
     any() {
       return (
@@ -90,8 +142,16 @@ export default {
   },
   data() {
     return {
+      random_id: (Math.random() * 0x7FFFFFFF) | 0,
       show_iframe: false
     };
   }
 };
 </script>
+
+<style scoped>
+.limit-height {
+  max-height: 500px;
+  width: auto;
+}
+</style>

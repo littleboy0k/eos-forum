@@ -1,81 +1,85 @@
 import Vue from 'vue';
 import Router from 'vue-router';
 
-import Test from '@/components/Test';
-import Home from '@/components/Home';
-import Thread from '@/components/Thread';
-import UserProfile from '@/components/UserProfile';
-import UserNotifications from "@/components/UserNotifications";
-//import Referendum from '@/components/Referendum';
-import Tag from "@/components/Tag";
-//import Search from "@/components/Search";
-import History from "@/components/History";
-import StartThread from "@/components/StartThread";
-import Settings from "@/components/Settings";
+Vue.use(Router);
 
-Vue.use(Router)
+window.__ROUTER_MODE__ = window.__ROUTER_MODE__ || "hash";
+window.__PRE_ROUTE__ = (window.__ROUTER_MODE__ == "hash") ? "#" : "";
 
-export default new Router({
+const router = new Router({
+  mode: window.__ROUTER_MODE__,
   routes: [
     { // default route
       path: '/',
       name: 'Index',
-      component: Home
+      component: () => import('@/components/Home')
+    },
+    { // default route
+      path: '/feed',
+      name: 'Feed',
+      component: () => import('@/components/Feed')
     },
     {
       path: '/e/:sub?',
       name: 'Sub',
-      component: Home
+      component: () => import('@/components/Home')
     },
     {
       path: '/e/:sub/new',
       name: 'StartThread',
-      component: StartThread
+      component: () => import('@/components/StartThread')
     },
     {
       path: '/e/:sub/edit/:edit_id',
       name: 'EditThread',
-      component: StartThread
+      component: () => import('@/components/StartThread')
     },
     {
       path: '/e/:sub/:id/:title?/:child_id?',
       name: 'Thread',
-      component: Thread
+      component: () => import('@/components/Thread')
     },
     {
       path: '/history/:id',
       name: 'History',
-      component: History
+      component: ()=> import('@/components/History')
     },
     {
       path: '/settings',
       name: 'Settings',
-      component: Settings
+      component: () => import('@/components/Settings')
     },
     {
       path: '/u/:account',
       name: 'UserProfile',
-      component: UserProfile
+      component: () => import('@/components/UserProfile')
     },
     {
       path: '/tag/:tag',
       name: "Tag",
-      component: Tag
+      component: () => import('@/components/Tag')
     },
-    /*{
-      path: '/search',
-      name: "Search",
-      component: Search
-    },*/
+    {
+      path: '/setID',
+      name: "setID",
+      component: () => import('@/components/SetID'),
+    },
     {
       path: '/notifications',
       name: 'UserNotifications',
-      component: UserNotifications
+      component: () => import('@/components/UserNotifications')
     },
     {
       path: '/test',
       name: 'Test',
-      component: Test
-    },
+      component: () => import('@/components/Test')
+    }
   ]
-})
+});
+
+router.beforeEach((to, from, next) => {
+  window.scrollTo(0,0);
+  next();
+});
+
+export default router;

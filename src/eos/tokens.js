@@ -1,54 +1,74 @@
 import requests from "@/requests";
 
-var our_tokens = [{
-    name: "EOS",
-    logo: "",
-    logo_lg: "",
-    symbol: "EOS",
-    account: "eosio.token"
-}, {
-    name: "CRASH",
-    logo: "",
-    logo_lg: "",
-    symbol: "CRASH",
-    account: "eoscrashplay"
-}, {
-    name: "PIXEOS",
-    logo: "",
-    logo_lg: "",
-    symbol: "PIXEOS",
-    account: "pixeos1token"
-}];
+var token_cache = null;
+var precision_cache = {};
 
 async function GetTokensInfo() {
-    var tokens = JSON.parse(
-        await requests.get(
-            "https://raw.githubusercontent.com/eoscafe/eos-airdrops/master/tokens.json"
-        )
-    );
+    if (!token_cache) {
 
-    tokens = our_tokens.concat(tokens);
-    let atmos = tokens.find(t => t.symbol == 'ATMOS');
-    atmos.logo = atmos.logo_lg = 'https://cdn.novusphere.io/static/atmos.svg';
-    return tokens;
+        var tokens = JSON.parse(
+            await requests.get(
+                "https://raw.githubusercontent.com/eoscafe/eos-airdrops/master/tokens.json"
+            )
+        );
+
+        var our_tokens = [];
+        try {
+            our_tokens = JSON.parse(
+                await requests.get(
+                    "https://raw.githubusercontent.com/Novusphere/eos-forum-settings/master/tokens.json"
+                )
+            );
+        }
+        catch (ex) {
+            console.log('malformed (our) tokens.json');
+            console.log(ex);
+        }
+
+
+        // merge our_tokens into tokens with overrides
+        for (var i = 0; i < our_tokens.length; i++) {
+
+            var token = our_tokens[i];
+            var existing = tokens.find(t => t.symbol == token.symbol && t.account == token.account);
+            if (existing) {
+                Object.assign(existing, token);
+            }
+            else {
+                tokens.push(token);
+            }
+
+        }
+
+        token_cache = tokens;
+    }
+
+    return token_cache;
 }
 
 async function GetTokenPrecision(eos, account, sym) {
-    const stats = await eos.getCurrencyStats(
-        account,
-        sym
-    );
-
     try {
-        const precision = stats[sym].supply
-            .split(" ")[0]
-            .split(".")[1].length;
+        const key = account + ':' + sym;
+        var precision = precision_cache[key];
+
+        if (!precision) {
+            const stats = await eos.rpc.get_currency_stats(
+                account,
+                sym
+            );
+
+            precision = stats[sym].supply
+                .split(" ")[0]
+                .split(".")[1].length;
+
+            precision_cache[key] = precision;
+        }
 
         return precision;
     }
     catch (ex) {
-        console.log(account + ' ' + sym);
-        console.log(stats);
+        //console.log(account + ' ' + sym);
+        //console.log(stats);
         return 0;
     }
 }

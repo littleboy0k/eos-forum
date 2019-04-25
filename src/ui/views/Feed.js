@@ -1,5 +1,7 @@
 import { GetEOS, GetIdentity, ExecuteEOSActions } from "@/eos";
 import { GetNovusphere } from "@/novusphere";
+import { storage, SaveStorage } from "@/storage";
+import { moderation } from "@/moderation";
 
 import { Post } from "@/types/post";
 
@@ -7,40 +9,38 @@ import {
     MAX_ITEMS_PER_PAGE,
 } from "@/ui/constants";
 
-export default async function UserNotifications(current_page) {
+export default async function Feed(current_page) {
+    var benchmark = (new Date()).getTime();
+
     current_page = parseInt(current_page ? current_page : 1);
 
-    const novusphere = GetNovusphere();
-    const identity = await GetIdentity();
+    // ---
 
-    if (!identity.account) {
-        return {
-            current_page: 1,
-            pages: 0,
-            posts: []
-        }
-    }
+    var novusphere = GetNovusphere();
+    var apiResult;
 
-    var n_notifications = (await novusphere.api({
+    console.log(storage.following);
+
+    var n_posts = (await novusphere.api({
         count: novusphere.config.collection_forum,
         maxTimeMS: 7500,
-        query: novusphere.query.match.notifications(identity.account)
+        query: novusphere.query.match.feed(storage.following)
     })).n;
 
-    var pages = Math.ceil(n_notifications / MAX_ITEMS_PER_PAGE);
+    var num_pages = Math.ceil(n_posts / MAX_ITEMS_PER_PAGE);
+    const identity = await GetIdentity();
 
     var posts = (await novusphere.api({
         aggregate: novusphere.config.collection_forum,
-        maxTimeMS: 7500,
+        maxTimeMS: 10000,
         cursor: {},
         pipeline: [
-            { $match: novusphere.query.match.notifications(identity.account) },
+            { $match: novusphere.query.match.feed(storage.following) },
             { $lookup: novusphere.query.lookup.postState() },
-            { $lookup: novusphere.query.lookup.postParent() },
             {
                 $project: novusphere.query.project.post({
                     normalize_up: true,
-                    normalize_parent: true
+                    score: true 
                 })
             },
             { $sort: novusphere.query.sort.time() },
@@ -48,9 +48,11 @@ export default async function UserNotifications(current_page) {
             { $limit: MAX_ITEMS_PER_PAGE },
             { $lookup: novusphere.query.lookup.postReplies() },
             { $lookup: novusphere.query.lookup.postMyVote(identity.account) },
+            { $lookup: novusphere.query.lookup.postParent() },
             {
                 $project: novusphere.query.project.post({
                     normalize_my_vote: true,
+                    normalize_parent: true,
                     recent_edit: true
                 })
             },
@@ -61,8 +63,8 @@ export default async function UserNotifications(current_page) {
     posts = await Post.fromArray(posts);
 
     return {
-        current_page: current_page,
-        pages: pages,
-        posts: posts
-    }
+        posts: posts,
+        pages: num_pages,
+        current_page: current_page
+    };
 }

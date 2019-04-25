@@ -2,7 +2,7 @@
   <layout ref="layout" :load="load">
 
     <template slot="topic">
-      <span v-if="sub">e/{{sub}}</span>
+      <span v-if="$root.sub">e/{{$root.sub}}</span>
       <span v-else>Home</span>
     </template>
 
@@ -16,17 +16,26 @@
           </post-sorter>
         </div>
         <div class="ml-1 float-left" v-if="!loading">
-          <button v-if="sub && !is_subscribed"
-            v-on:click="subscribe(true)"
+          <button
             type="button"
-            class="btn btn-outline-primary mr-1">
-            subscribe
+            class="btn btn-none"
+            @click="showPreview()"
+            :class="{
+              'btn-primary' : $root.showPreview,
+              'btn-outline' : !$root.showPreview
+            }"
+          >
+            <font-awesome-icon :icon="['fas', 'th-list']" />
           </button>
-          <button v-if="sub && is_subscribed"
-            v-on:click="subscribe(false)"
+          <button
             type="button"
-            class="btn btn-outline-danger mr-1">
-            unsubscribe
+            @click="hidePreview()"
+            class="btn"
+            :class="{
+              'btn-primary' : !$root.showPreview,
+              'btn-outline' : $root.showPreview
+            }">
+            <font-awesome-icon :icon="['fas', 'list']" />
           </button>
         </div>
         <div class="float-right">
@@ -47,22 +56,28 @@
         <post
           v-for="p in posts"
           class="post-parent"
+          :class="{'hide-preview': $root.showPreview === false}"
           :key="p.transaction"
-          @openPost="openPost"
+          @openPost="$_openPost"
           :post="p"
+          :showChildren="false"
         />
         <modal
-          @click.native="closePost"
+          @click.native.stop="$_closePost"
           v-if="selectedPostID">
           <thread-modal
-            @click.native.stop
+            @close="$_closePost"
             :id="selectedPostID"
           />
         </modal>
       </div>
-
       <div class="text-center" v-else>
         <h1><font-awesome-icon :icon="['fas', 'spinner']" spin></font-awesome-icon></h1>
+      </div>
+      <div v-if="!loading" class="float-right mb-3">
+        <pager :pages="pages"
+          :current_page="current_page">
+        </pager>
       </div>
     </template>
 
@@ -130,15 +145,17 @@ export default {
       this.sub = this.$route.params.sub;
       this.posts = [];
       this.pages = 0;
+      this.selectedPostID = undefined;
+      window.scrollTo(0,0);
 
-      const novusphere = GetNovusphere();
       var home = await ui.views.Home(this.$route.query.page, this.sub, this.$refs.sorter.getSorter());
-      this.is_subscribed = home.is_subscribed;
+
+      this.sub = home.sub;
       this.posts = home.posts;
       this.pages = home.pages;
       this.current_page = home.current_page;
-      this.sub = home.sub;
       this.loading = false;
+
 
     },
     async newThread() {
@@ -150,28 +167,21 @@ export default {
         alert(reason);
       }
     },
-    postContent(txid) {
-      this.$router.push("/e/" + this.sub + "/" + txid);
+    hidePreview () {
+      this.$root.showPreview = false;
+      localStorage.setItem('preview', false);
     },
-    async subscribe(sub) {
-      this.is_subscribed = await ui.actions.Subscribe(sub, this.sub);
-    },
-    openPost (postID, sub){
-      this.selectedPostID = postID;
-      history.pushState({},"","#/e/" + sub + "/" + postID);
-    },
-    closePost () {
-      this.selectedPostID = undefined;
-      history.pushState({},"","#/");
+    showPreview () {
+      this.$root.showPreview = true;
+      localStorage.setItem('preview', true);
     }
   },
   data() {
     return {
       loading: false,
-      is_subscribed: false,
       current_page: 0,
       pages: 0,
-      sub: "",
+      sub: '',
       posts: [], // for posts being displayed
       selectedPostID: undefined,
       eos_referendum: storage.eos_referendum,

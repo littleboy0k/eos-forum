@@ -7,7 +7,7 @@
     </template>
 
     <template slot="content">
-      <b-button @click="$router.go(-1)" class="btn btn-sm btn-outline-primary mb-1">
+      <b-button @click="$router.go(-1)" class="btn btn-sm btn-primary mb-1">
         <font-awesome-icon :icon="['fas', 'arrow-left']" ></font-awesome-icon>
         back
       </b-button>
@@ -15,17 +15,17 @@
         <li class="nav-item">
           <a class="nav-link active"
             data-toggle="tab"
-            href="#mod"
+            href="#anonid"
             role="tab">
-            Moderation
+            Set ID
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link"
             data-toggle="tab"
-            href="#anonid"
+            href="#mod"
             role="tab">
-            Anon Id
+            Moderation
           </a>
         </li>
         <li class="nav-item" v-if="false">
@@ -44,9 +44,50 @@
             Raw
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link"
+            data-toggle="tab"
+            href="#account"
+            role="tab">
+            Account
+          </a>
+        </li>
       </ul>
       <div class="tab-content mt-2">
-        <div class="tab-pane fade show active" id="mod" role="tabpanel">
+        <div class="tab-pane fade show active" id="anonid" role="tabpanel">
+          <div class="text-center">
+            <p>
+              Use this panel to set your ID.
+              This is used when posting anonymously to identify your posts.
+              You can regenerate a new ID / Key at any time.
+            </p>
+          </div>
+          <form class="mx-4">
+            <div class="form-group row">
+              <label class="col-2 col-form-label">Name</label>
+              <div class="col-8">
+                <input type="text" class="form-control" v-model="anon_name" placeholder="name">
+              </div>
+            </div>
+            <div class="form-group row">
+              <label class="col-2 col-form-label">Key</label>
+              <div class="col-8">
+                <input type="text" class="form-control" v-model="anon_key" placeholder="identity key">
+              </div>
+            </div>
+            <div class="form-group row">
+              <label class="col-2 col-form-label"></label>
+              <div class="col-8">
+                <input type="text" class="form-control" v-model="anon_identity" readonly placeholder="identity public key">
+              </div>
+            </div>
+            <div class="text-center">
+                <button type="button" class="btn btn-primary" v-on:click="newAnonId()">new</button>
+                <button type="button" class="btn btn-primary" v-on:click="saveAnonId()" data-dismiss="modal">save</button>
+            </div>
+          </form>
+        </div>
+        <div class="tab-pane fade" id="mod" role="tabpanel">
           <div class="text-center">
               <p class="">
                   Use this panel to control your delegated moderation settings.
@@ -80,7 +121,7 @@
               </div>
               <div class="col-2">
                 <button type="button"
-                  class="btn btn-outline-primary"
+                  class="btn btn-primary"
                   v-on:click="addMod()">
                   add
                 </button>
@@ -98,44 +139,11 @@
               </div>
               <div class="col-2">
                 <button type="button"
-                  class="btn btn-outline-danger"
+                  class="btn btn-danger"
                   v-on:click="removeMod(index)">
                   <font-awesome-icon :icon="['fas', 'times']" ></font-awesome-icon>
                 </button>
               </div>
-            </div>
-          </form>
-        </div>
-        <div class="tab-pane fade" id="anonid" role="tabpanel">
-          <div class="text-center">
-              <p class="">
-                  Use this panel to control your anonymous identity.
-                  This is used when posting anonymously to identify your posts.
-                  You can regenerate a new anonymous identity at any time.
-              </p>
-          </div>
-          <form class="mx-4">
-            <div class="form-group row">
-              <label class="col-2 col-form-label">Name</label>
-              <div class="col-8">
-                <input type="text" class="form-control" v-model="anon_name" placeholder="name">
-              </div>
-            </div>
-            <div class="form-group row">
-              <label class="col-2 col-form-label">Key</label>
-              <div class="col-8">
-                <input type="text" class="form-control" v-model="anon_key" placeholder="identity key">
-              </div>
-            </div>
-            <div class="form-group row">
-              <label class="col-2 col-form-label"></label>
-              <div class="col-8">
-                <input type="text" class="form-control" v-model="anon_identity" readonly placeholder="identity public key">
-              </div>
-            </div>
-            <div class="text-center">
-                <button type="button" class="btn btn-outline-primary" v-on:click="newAnonId()">new</button>
-                <button type="button" class="btn btn-outline-primary" v-on:click="saveAnonId()" data-dismiss="modal">save</button>
             </div>
           </form>
         </div>
@@ -153,9 +161,9 @@
               </div>
             </div>
             <div class="text-center">
-              <button type="button" class="btn btn-outline-primary" data-dismiss="modal" v-on:click="save()">save</button>
-              <button type="button" class="btn btn-outline-primary" v-on:click="reset()">reset</button>
-              <button type="button" class="btn btn-outline-danger" v-on:click="forgetAll()">forget all</button>
+              <button type="button" class="btn btn-primary" data-dismiss="modal" v-on:click="save()">save</button>
+              <button type="button" class="btn btn-primary" v-on:click="reset()">reset</button>
+              <button type="button" class="btn btn-danger" v-on:click="forgetAll()">forget all</button>
             </div>
           </form>
         </div>
@@ -183,9 +191,15 @@
                 <input type="text" class="form-control" v-model="new_theme" placeholder="theme css url">
               </div>
               <div class="col-2">
-                <button type="button" class="btn btn-outline-primary" v-on:click="saveTheme()">save</button>
+                <button type="button" class="btn btn-primary" v-on:click="saveTheme()">save</button>
               </div>
             </div>
+          </form>
+        </div>
+        <div class="tab-pane fade" id="account" role="tabpanel">
+          <div class="text-center">
+          </div>
+          <form class="mx-4">
           </form>
         </div>
       </div>
@@ -202,6 +216,7 @@ import ecc from "eosjs-ecc";
 import ui from "@/ui";
 import { storage, DEFAULT_STORAGE, SaveStorage } from "@/storage";
 import { moderation } from "@/moderation";
+import { LoadAccountState } from "@/accountstate";
 
 import Pager from "@/components/core/Pager";
 import Post from "@/components/core/Post";
@@ -249,10 +264,11 @@ export default {
     reset() {
       this.settings = JSON.stringify(DEFAULT_STORAGE.settings, null, 2);
     },
-    save() {
+    async save() {
       storage.settings = JSON.parse(this.settings);
       this.theme = storage.settings.theme;
       this.mods = storage.moderation.mods;
+
       SaveStorage();
     },
     forgetAll() {
@@ -298,14 +314,42 @@ export default {
     async newAnonId() {
       this.anon_key = await ecc.randomKey();
     },
-    saveAnonId() {
+    async saveAnonId() {
       if (this.anon_name.length > 12) {
-        alert('Anonymous name must be less than 13 characters');
+        alert("Anonymous name must be less than 13 characters");
         return;
       }
       storage.anon_id.name = this.anon_name;
-      storage.anon_id.key = (this.anon_key && ecc.isValidPrivate(this.anon_key)) ? this.anon_key : "";
-      SaveStorage();
+      storage.anon_id.key =
+        this.anon_key && ecc.isValidPrivate(this.anon_key) ? this.anon_key : "";
+
+      if (storage.anon_id.key) {
+        await LoadAccountState();
+        SaveStorage();
+
+        this.$forceUpdate();
+
+        // download
+
+        const json = JSON.stringify({
+          name: storage.anon_id.name,
+          key: storage.anon_id.key,
+          identity: ecc.privateToPublic(storage.anon_id.key)
+        });
+
+        var a = window.document.createElement("a");
+        a.href = window.URL.createObjectURL(
+          new Blob([json], { type: "application/json" })
+        );
+        a.download = "forum-anonid.json";
+
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+      } else {
+        SaveStorage();
+      }
     }
   },
   data() {

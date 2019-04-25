@@ -1,13 +1,21 @@
 <template>
-  <div class="thread-container">
-    <post v-if="opening_post.id" class="root" :post="main_post" :thread="opening_post" />
-    <div v-else class="white-bg">
-      <div>
-        Loading thread...
+  <div @click="$emit('close')" class="thread-container">
+    <post
+      v-if="opening_post.id"
+      @click.native.stop
+      class="root"
+      :post="main_post"
+      :thread="opening_post"
+    />
+    <div v-else class="loader">
+      <div class="white-bg">
+        <div>
+          Loading thread...
+        </div>
+        <h1>
+          <font-awesome-icon :icon="['fas', 'spinner']" spin />
+        </h1>
       </div>
-      <h1>
-        <font-awesome-icon :icon="['fas', 'spinner']" spin />
-      </h1>
     </div>
   </div>
 </template>
@@ -19,7 +27,6 @@ import { GetNovusphere } from "@/novusphere";
 import Pager from "@/components/core/Pager";
 import PostSorter from "@/components/core/PostSorter";
 import Post from "@/components/core/Post";
-import RecentlyVisited from "@/components/core/RecentlyVisited";
 
 import Layout from "@/components/section/Layout";
 
@@ -34,7 +41,6 @@ export default {
   components: {
     Pager,
     PostSorter,
-    RecentlyVisited,
     Post,
     Layout
   },
@@ -46,22 +52,35 @@ export default {
       this.load();
     }
   },
+  beforeDestroy() {
+    this.inactive = true;
+  },
   async mounted() {
-    console.log('opening post:', this.id);
     this.load(this.id);
   },
   props: {
     id: {
       default: 0,
-      type: Number,
+      type: Number
     }
   },
   methods: {
-    async load(id = this.$route.params.id, child_id = this.$route.params.child_id) {
+    async load(
+      id = this.$route.params.id,
+      child_id = this.$route.params.child_id
+    ) {
+      if (this.inactive) {
+        return;
+      }
+
       var thread = await ui.views.Thread(id, child_id);
-      this.opening_post = thread.opening_post;
-      this.main_post = thread.main_post;
-      // this.loading = false;
+      if (thread.count > this.count) {
+        this.opening_post = thread.opening_post;
+        this.main_post = thread.main_post;
+        this.count = thread.count;
+      }
+
+      setTimeout(() => this.load(id, child_id), 7500);
     },
     postContent(txid, data) {
       this.load(); // reload thread
@@ -72,33 +91,47 @@ export default {
       opening_post: ui.helpers.PlaceholderPost(),
       main_post: ui.helpers.PlaceholderPost(),
       loading: true,
+      count: 0,
+      inactive: false
     };
   }
 };
 </script>
 
 <style scoped>
-.white-bg {
-    background-color: white;
-    width: 640px;
-    height: 200px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
+.loader {
+  width: 100vw;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 .thread-container {
-    margin-top: 5vh;
-    margin-bottom: 5vh;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+.white-bg {
+  align-self: center;
+  background-color: white;
+  height: 200px;
+  width: 60vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 .root {
-  max-width: 100%;
-  width: 1000px;
-  min-width: 80%;
+  padding-bottom: 10px;
+  padding-top: 10px;
 }
 .post {
-    max-height: 80vh;
-    overflow-y: auto;
-    overflow-x: hidden;
+  width: 60vw;
 }
 </style>

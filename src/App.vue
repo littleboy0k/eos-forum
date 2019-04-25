@@ -3,7 +3,7 @@
     <ErrorModal></ErrorModal>
     <ConfirmModal></ConfirmModal>
     <UpvoteModal ref="upvote"></UpvoteModal>
-    
+
     <router-view/>
   </div>
 </template>
@@ -26,6 +26,12 @@ export default {
   },
   mounted() {
     window._VueApp = this;
+    if (screen.width <= 600) {
+      this.$root.showSubs = false;
+    }
+    if (localStorage.getItem('preview')) {
+      this.$root.showPreview = JSON.parse(localStorage.getItem('preview'));
+    }
   },
   methods: {},
   computed: {},

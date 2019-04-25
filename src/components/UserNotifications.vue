@@ -20,16 +20,25 @@
               </div>
         </div>
 
-        <post v-for="p in posts" :key="p.o_id" :post="p"></post>
+        <post
+          class="notification post-parent"
+          v-for="p in posts"
+          :key="p.transaction"
+          :showAsFeed="true"
+          @openPost="$_openPost"
+          :post="p"
+        />
+        <modal
+          @click.native="$_closePost"
+          v-if="selectedPostID">
+          <thread-modal
+            @click.native.stop
+            :id="selectedPostID"
+          />
+        </modal>
       </div>
       <div class="text-center" v-else>
         <h1><font-awesome-icon :icon="['fas', 'spinner']" spin></font-awesome-icon></h1>
-      </div>
-    </template>
-
-    <template slot="right_sidebar">
-      <div class="sidebarblock">
-        <recently-visited></recently-visited>
       </div>
     </template>
 
@@ -42,9 +51,10 @@ import ui from "@/ui";
 import Pager from "@/components/core/Pager";
 import Post from "@/components/core/Post";
 import PostSorter from "@/components/core/PostSorter";
-import RecentlyVisited from "@/components/core/RecentlyVisited";
-
 import Layout from "@/components/section/Layout";
+
+import Modal from "@/components/modal/Modal.vue";
+import ThreadModal from "@/components/ThreadModal.vue";
 
 export default {
   name: "UserNotifications",
@@ -53,7 +63,8 @@ export default {
     Pager,
     Post,
     PostSorter,
-    RecentlyVisited
+    Modal,
+    ThreadModal,
   },
   watch: {
     "$route.query.page": function() {
@@ -78,14 +89,15 @@ export default {
       await ui.actions.MarkNotificationsAsRead();
 
       this.loading = false;
-    }
+    },
   },
   data() {
     return {
       loading: false,
       posts: [],
       current_page: 1,
-      pages: 0
+      pages: 0,
+      selectedPostID: undefined,
     };
   }
 };

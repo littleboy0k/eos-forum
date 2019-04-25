@@ -6,21 +6,15 @@
     </template>
 
     <template slot="content">
-        <b-tabs>
+      <b-tabs>
         <b-tab title="comments" active>
           <div class="mt-2 mb-2">
-            <div class="float-left">
-              <post-sorter ref="sorter" :change="load"></post-sorter>
-            </div>
-            <div class="float-left ml-1">
-              <b-button class="btn btn-outline-danger" v-on:click="toggleBlock()">{{ is_blocked ? 'unblock' : 'block' }}</b-button>
-            </div>
             <div class="float-right">
               <pager :pages="pages" :current_page="current_page"></pager>
             </div>
             <div class="clearfix"></div>
           </div>
-          
+
           <div class="post-container" v-if="!loading">
             <div v-if="posts.length == 0">
               <div class="text-center">
@@ -32,11 +26,12 @@
               v-for="p in posts"
               class="post-parent"
               :key="p.o_id"
-              @openPost="openPost"
+              :showAsFeed="true"
+              @openPost="$_openPost"
               :post="p"
             />
             <modal
-              @click.native="closePost"
+              @click.native="$_closePost"
               v-if="selectedPostID">
               <thread-modal
                 @click.native.stop
@@ -55,25 +50,68 @@
           Blogs...
         </b-tab>
       </b-tabs>
+      <modal @mousedown.native.stop="closeSendAtmosModal()" v-if="showSendAtmosModal">
+        <div class="modal-container">
+          <div @mousedown.stop class="send-atmos-modal">
+            <div>
+              Send ATMOS
+            </div>
+            <div>
+              <label> To: </label>
+              <div class="form-control">
+                {{ account }}
+              </div>
+            </div>
+            <div>
+              <label> Amount: </label>
+              <input class="form-control" type="text" v-model="modal.amount" />
+            </div>
+            <div class="footer">
+              <button type="button" @click="closeSendAtmosModal()" class="btn btn-danger">
+                Cancel
+              </button>
+              <button type="button" @click="closeSendAtmosModal()" class="btn btn-primary">
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      </modal>
     </template>
 
     <template slot="right_sidebar">
-      <div class="sidebarblock">
-        <div>
-          <h3>{{ account }}</h3>
-          <div class="divline"></div>
-          <div class="blocktxt">
-            Balances: {{ balances.atmos }} ATMOS
+      <div class="block">
+        <div class="blocktxt">
+          <div> 
+            <img v-if="user_icons.length > 0" v-for="(icon, i) in user_icons" :key="i" width="25" height="25" :src="icon">     
+            <font-awesome-icon v-else class="fas" :icon="['fas', 'user-circle']" />
+
+            {{ account }} 
           </div>
-          <div class="blocktxt">
-            Comments: {{ comments }}
-          </div>
-          <div class="blocktxt">
-            Threads: {{ threads }}
-          </div>
-          <div class="blocktxt">
-            Last Activity: {{ last_activity }}
-          </div>
+          <button class="btn btn-primary mt-3" v-on:click="toggleFollow()">
+            {{ is_followed ? 'Unfollow' : 'Follow' }}
+          </button>
+          <button class="btn btn-danger mt-3" v-on:click="toggleBlock()">
+            {{ is_blocked ? 'Unblock' : 'Block' }}
+          </button>
+        </div>
+        <div class="divline"></div>
+        <div class="blocktxt">
+          Balances: {{ balances.atmos }} ATMOS
+        </div>
+        <div class="blocktxt">
+          Comments: {{ comments }}
+        </div>
+        <div class="blocktxt">
+          Threads: {{ threads }}
+        </div>
+        <div class="blocktxt">
+          Last Activity: {{ last_activity }}
+        </div>
+        <div class="blocktxt">
+          <button class="btn btn-primary" @click="showSendAtmosModal = true">
+            Send ATMOS
+          </button>
         </div>
       </div>
     </template>
@@ -85,11 +123,7 @@
 <script>
 import ui from "@/ui";
 
-import {
-  GetEOS,
-  GetIdentity,
-  ScatterEosOptions
-} from "@/eos";
+import { GetEOS, GetIdentity, ScatterEosOptions } from "@/eos";
 import { GetNovusphere } from "@/novusphere";
 import { storage, SaveStorage } from "@/storage";
 import { moderation } from "@/moderation";
@@ -110,7 +144,7 @@ export default {
     Post,
     PostSorter,
     Modal,
-    ThreadModal,
+    ThreadModal
   },
   watch: {
     "$route.query.page": function() {
@@ -121,21 +155,27 @@ export default {
     }
   },
   async mounted() {
-    this.$refs.sorter.by = "time";
+    //this.$refs.sorter.by = "time";
     this.load();
   },
-  computed: {
-  },
+  computed: {},
   methods: {
     async load() {
       this.loading = true;
+      this.account = this.$route.params.account;
 
-      var profile = await ui.views.UserProfile(this.$route.query.page, this.$route.params.account, this.$refs.sorter.getSorter());
+      const novusphere = GetNovusphere();
+      var profile = await ui.views.UserProfile(
+        this.$route.query.page,
+        this.$route.params.account,
+        novusphere.query.sort.time()
+      );
 
       this.current_page = profile.current_page;
       this.account = profile.account;
-
+      this.user_icons = profile.user_icons;
       this.is_blocked = profile.is_blocked;
+      this.is_followed = profile.is_followed;
       this.balances.atmos = profile.balance_atmos;
       this.comments = profile.n_comments;
       this.threads = profile.n_threads;
@@ -145,22 +185,34 @@ export default {
       this.loading = false;
     },
     async toggleBlock() {
-      await ui.actions.BlockUser(this.account, this.is_blocked);
-      await this.load();
+      if (!this.account) {
+        return;
+      }
+
+      await ui.actions.ToggleBlockUser(this.account, this.is_blocked);
+      this.is_blocked = !this.is_blocked;
     },
-    openPost (postID, sub){
-      this.selectedPostID = postID;
-      history.pushState({},"","#/e/" + sub + "/" + postID);
+    async toggleFollow() {
+      if (!this.account) {
+        return;
+      }
+
+      await ui.actions.ToggleFollowUser(this.account, this.is_followed);
+      this.is_followed = !this.is_followed;
     },
-    closePost () {
-      this.selectedPostID = undefined;
-      history.pushState({},"","#/");
+
+    closeSendAtmosModal() {
+      this.showSendAtmosModal = false;
+      this.modal = {
+        amount: 0,
+      }
     }
   },
   data() {
     return {
       loading: false,
       is_blocked: false,
+      is_followed: false,
       account: "",
       balances: {
         atmos: 0
@@ -169,10 +221,49 @@ export default {
       threads: 0,
       last_activity: "",
       posts: [],
+      user_icons: [],
       current_page: 1,
       pages: 0,
       selectedPostID: undefined,
+      showSendAtmosModal: false,
+      modal: {
+        amount: 0,
+      }
     };
   }
 };
 </script>
+
+<style scoped>
+.modal-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.send-atmos-modal {
+  background-color: white;
+  width: 400px;
+  padding: 20px;
+  color: black;
+}
+
+.send-atmos-modal > div {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+}
+.send-atmos-modal > div > label {
+  width: 100px;
+  margin: 0;
+}
+.send-atmos-modal .footer {
+  justify-content: flex-end;
+  margin: 0;
+}
+.send-atmos-modal .footer button {
+  margin-left: 10px;
+}
+</style>

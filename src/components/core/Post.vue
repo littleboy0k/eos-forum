@@ -1,7 +1,8 @@
 <template>
   <!-- POST -->
   <div
-    @click="$emit('openPost', selectedPostID, post.data.json_metadata.sub)"
+    v-if="!(!showChildren && hide_spam_threads && is_spam)"
+    @click="openPost"
     class="post">
     <template v-if="post.depth !== 0">
       <div
@@ -11,73 +12,88 @@
           class="toggle-icon"
           :icon="['fas', hide ? 'plus-circle' : 'minus-circle']"
         />
-        <font-awesome-icon class="user" :icon="['fas', reddit ? 'reddit' : 'user-secret']" />
-        {{ post.data.poster }}
+        <li class="list-inline-item">
+          <a v-if="reddit.author"
+            @click.stop
+            :href="`https://www.reddit.com/user/${reddit.author}`">
+            <font-awesome-icon class="fas" :icon="['fab', 'reddit']" />
+            {{ poster_name }}
+          </a>
+          <router-link
+            v-else-if="post.transaction"
+            @click.native.stop
+            :class="{'disabled': is_anon_alias}"
+            :to="{ name: 'UserProfile', params: { account: post.data.poster } }">
+
+            <img v-if="post.user_icons.length > 0" v-for="(icon, i) in post.user_icons" :key="i" width="25" height="25" :src="icon">     
+            <font-awesome-icon v-if="post.user_icons.length == 0" class="fas" :icon="['fas', is_anon_alias ? 'user-secret' : 'user-circle']" />
+
+            {{ poster_name }}
+          </router-link>
+        </li>
         <div class="date">
-          {{ new Date(post.createdAt * 1000).toLocaleString() }}
+          {{ created_at }}
         </div>
-        <div class="flex-center received-tips">
-          <div :key="key" class="flex-center" v-for="(tip, key) in received_tips">
-            <img class="tip-icon" :src="$root.icons[key].logo" :title="`${tip}-${key}`" />
+        <div class="flex-center received-tips ml-1">
+          <div
+            :title="`${tip} ${key}`"
+            @click.stop.prevent="goToSub(key)"
+            :key="key"
+            class="flex hover"
+            v-for="(tip, key) in received_tips">
+            <img v-if="key in $root.icons" class="tip-icon" :src="$root.icons[key].logo" />
+            <span v-else>{{ key }}</span>
             <div class="tip-amount"> x {{ tip }} </div>
           </div>
         </div>
       </div>
     </template>
     <div class="post-body" :class="{'hidden': hide === true && post.depth !== 0}">
-      <div class="topwrap">
+      <div class="flex-column">
 
-        <div class="userinfo float-left">
-          <div v-if="!thread && !post.referendum"
-            class="postthumbnail">
-            <img :src="thumbnail"
-              class="img-fluid"
-              alt="thumbnail">
-          </div>
-
-          <div v-if="!post.referendum"
-            class="text-center">
-            <a
-              class="up"
-              @click.stop="upvote()">
-              <font-awesome-icon :icon="['far', 'thumbs-up']" />
-              {{ post.up }}
-            </a>
-          </div>
-
-          <div v-else class="text-center">
+        <div class="userinfo">
+          <div v-if="is_op" class="post-icon" >
             <div>
-              <font-awesome-icon :icon="['fas', 'user']" />
-              {{ post.referendum.details.total_participants }}
+              <img class="hover" @click.stop.prevent="goToSub()" :src="thumbnail" alt="thumbnail">
+            </div>
+            <div v-if="post.referendum && post.referendum.details" class="text-center">
+              <div>
+                <font-awesome-icon :icon="['fas', 'user']" />
+                {{ post.referendum.details.total_participants }}
+              </div>
             </div>
           </div>
-
-          <div class="text-center">
-            <font-awesome-icon v-if="post.is_pinned" :icon="['fas', 'thumbtack']" />
-            <font-awesome-icon v-if="is_spam" :icon="['fas', 'exclamation-triangle']" />
-            <font-awesome-icon v-if="is_nsfw" :icon="['fas', 'eye-slash']" />
-          </div>
-        </div>
-
-        <div class="posttext float-left">
           <div>
               <div class="flex-center">
-                <a :href="offsite ? post.o_attachment.value : undefined" class="title" target="_blank">
+
+                <a @click.stop="$emit('openPost', selectedPostID, post.data.json_metadata.sub)" class="title" target="_blank">
                   {{ post.data.json_metadata.title }}
                 </a>
-                <a v-if="offsite" :href="post.o_attachment.value" class="offsite" target="_blank">
+                <div v-if="post.is_pinned || is_spam || is_nsfw" class="text-center ml-1 mr-1">
+                  <font-awesome-icon v-if="post.is_pinned" :icon="['fas', 'thumbtack']" />
+                  <font-awesome-icon v-if="is_spam" :icon="['fas', 'exclamation-triangle']" />
+                  <font-awesome-icon v-if="is_nsfw" :icon="['fas', 'eye-slash']" />
+                </div>
+                <a v-if="offsite" :href="post.data.json_metadata.attachment.value" class="offsite" target="_blank">
                   ({{ offsite }})
                 </a>
-                <template v-if="post.depth === 0">
-                  <div class="flex-center received-tips">
-                    <div :key="key" class="flex-center" v-for="(tip, key) in received_tips">
-                      <img class="tip-icon" :src="$root.icons[key].logo" :title="`${tip}-${key}`" />
-                      <div class="tip-amount"> x {{ tip }} </div>
+                <template v-if="is_op">
+                  <div class="flex-center received-tips ml-1">
+                    <div
+                      :title="`${tip} ${key}`"
+                      @click.stop.prevent="goToSub(key)"
+                      :key="key"
+                      class="flex hover"
+                      v-for="(tip, key) in received_tips"
+                    >
+                        <img v-if="key && (key in $root.icons)" class="tip-icon" :src="$root.icons[key].logo"/>
+                        <div v-else>{{ key }}</div>
+                        <div class="tip-amount"> x {{ tip }} </div>
                     </div>
                   </div>
                 </template>
               </div>
-              <div v-if="post.depth === 0">
+              <div v-if="is_op">
                 <li class="list-inline-item">
                   <a v-if="reddit.author"
                     @click.stop
@@ -87,17 +103,21 @@
                   </a>
                   <router-link
                     v-else-if="post.transaction"
-                    @click.stop
+                    @click.native.stop
+                    :class="{'disabled': is_anon_alias}"
                     :to="{ name: 'UserProfile', params: { account: post.data.poster } }">
-                    <font-awesome-icon v-if="is_anon_alias" :icon="['fas', 'user-secret']" />
+                    
+                    <img v-if="post.user_icons.length > 0" v-for="(icon, i) in post.user_icons" :key="i" width="25" height="25" :src="icon">
+                    <font-awesome-icon v-if="post.user_icons.length == 0"  class="fas" :icon="['fas', is_anon_alias ? 'user-secret' : 'user-circle']" />
+
                     {{ poster_name }}
                   </router-link>
                 </li>
-                <li v-if="!thread || post.depth == 0"
+                <li v-if="!thread || is_op"
                   class="list-inline-item">
                   in
                   <router-link
-                    @click.stop
+                    @click.native.stop
                     v-if="post.id"
                     :to="{ name: 'Sub', params: { sub: post.data.json_metadata.sub } }">
                     {{ post.data.json_metadata.sub }}
@@ -105,22 +125,36 @@
                 </li>
               </div>
           </div>
+          <div v-if="is_op" class="op-upvote">
+            <a
+              class="up"
+              @click.stop="upvote()">
+              <font-awesome-icon :icon="['fas', 'caret-up']" />
+              {{ post.up }}
+            </a>
+          </div>
+        </div>
 
-          <post-attachment
-            v-if="thread"
-            ref="post_attachment"
-            :attachment="post.data.json_metadata.attachment"
-            :id="'content-' + post.data.post_uuid"
-            :collapse="false">
-          </post-attachment>
+        <div
+          class="posttext float-left"
+          :class="{
+            'op-posttext': is_op
+          }"
+        >
+          <div>
+            <post-attachment
+              ref="post_attachment"
+              :attachment="post.data.json_metadata.attachment"
+              :id="'content-' + post.data.post_uuid"
+              :collapse="false">
+            </post-attachment>
+          </div>
+          <div v-if="post.referendum && post.referendum.details">
 
-          <p :class="{'referendum' : post.referendum}" v-if="post_content_html" v-html="post_content_html" />
-
-          <div v-if="post.referendum">
             <div v-for="(o, i) in post.referendum.options" :key="i" class="mb-1">
-              <input v-if="identity.account && !is_multi_referendum" class="form-check-input" type="radio" name="vote" :value="i" v-model="vote_value">
-              <input v-if="identity.account && is_multi_referendum" class="form-check-input" type="checkbox" name="vote2" v-model="vote_value_multi[i]">
               <div class="progress">
+                <input v-if="identity.account && !is_multi_referendum" class="checkbox" type="radio" name="vote" :value="i" v-model="vote_value">
+                <input v-if="identity.account && is_multi_referendum" class="checkbox" type="checkbox" name="vote2" v-model="vote_value_multi[i]">
                 <div class="referendumbar progress-bar" role="progressbar" :style="'width: ' + post.referendum.details.votes[i].percent + '%; background-color: ' + referendumColor(i)">
                   {{ o }} ({{ post.referendum.details.votes[i].percent }}%)
                 </div>
@@ -128,11 +162,13 @@
             </div>
 
             <div class="text-center" v-if="identity.account">
-              <a class="btn btn-sm btn-outline-primary" :class="{'referendum' : post.referendum}" @click.stop="referendumVote()" v-if="!post.referendum.expired">vote</a>
+              <a class="btn btn-sm btn-primary" :class="{'referendum' : post.referendum}" @click.stop="referendumVote()" v-if="!post.referendum.expired">vote</a>
               <a class="btn btn-sm btn-outline-secondary" @click.stop="referendumExpire()" v-if="!post.referendum.expired && post.data.poster == identity.account">expire</a>
               <a class="btn btn-sm btn-outline-secondary" @click.stop="referendumClean()" v-if="post.data.poster == identity.account">clean</a>
             </div>
           </div>
+          
+          <p v-if="post_content_html()" v-html="post_content_html()" />
         </div>
         <div class="clearfix"></div>
       </div>
@@ -140,36 +176,60 @@
         <div class="posted">
           <ul class="list-inline">
             <li class="list-inline-item">
-              <router-link @click.stop v-if="!thread && post.transaction" :to="thread_link">
-                  <font-awesome-icon :icon="['fas', 'reply']" />
-                  <span v-if="!post.parent">{{ post.total_replies }} comments</span>
-              </router-link>
+              <a
+                v-if="!is_op"
+                class="up"
+                style="margin-right: 10px;display: inline"
+                @click.stop="upvote()">
+                <font-awesome-icon :icon="['fas', 'caret-up']" />
+                {{ post.up }}
+              </a>
+              <a
+                v-if="!thread && post.transaction && !showAsFeed"
+                class="link"
+                @click.stop.prevent="$router.push(thread_link)"
+              >
+                <font-awesome-icon :icon="['fas', 'reply']" />
+                <span v-if="!post.parent ">{{ post.total_replies }} comments</span>
+              </a>
+              <a class="reply" v-else-if="showAsFeed">
+                <font-awesome-icon :icon="['fas', 'reply']" />
+                reply
+              </a>
               <a class="reply" v-else @click.stop="showQuickReply()">
                 <font-awesome-icon :icon="['fas', 'reply']" />
                 reply
               </a>
             </li>
-            <li v-if="post.referendum" class="list-inline-item">
+            <li v-if="post.referendum && post.referendum.details && (post.referendum.details.total != undefined)" class="list-inline-item">
               <img src="https://cdn.novusphere.io/static/eos3.svg" style="display: inline-block; height: 2em">
-              {{ post.referendum.details.total_eos.toFixed(4) }}
+              {{ post.referendum.details.total.toFixed(4) }}
             </li>
             <li v-if="is_mine && thread && !post.referendum" class="list-inline-item">
-              <router-link @click.stop v-if="is_op" :to="{ name: 'EditThread', params: { sub: sub, edit_id: post.o_transaction } }">
+              <div
+                class="hover"
+                @click.stop="is_op ?
+                $router.push({
+                  name: 'EditThread',
+                  params: {
+                    sub: sub,
+                    edit_id: post.o_transaction
+                  }
+                }) :
+                showQuickEdit()">
                 <font-awesome-icon :icon="['fas', 'edit']" />
                 edit
-              </router-link>
-              <a v-else @click.stop="showQuickEdit()">
-                <font-awesome-icon :icon="['fas', 'edit']" />
-                edit
-              </a>
+              </div>
             </li>
-            <li class="list-inline-item" v-if="post.depth === 0">
+            <li class="list-inline-item" v-if="is_op">
               <template v-if="!post.referendum">
                 <font-awesome-icon :icon="['fas', 'clock']" />
-                {{ new Date(post.createdAt * 1000).toLocaleString() }}
+                {{ created_at }}
               </template>
+            </li>
+            <li class="list-inline-item">
               <router-link
-                @click.stop
+                @click.native.stop
                 v-if="post.id && is_edit"
                 :to="{ name: 'History', params: { id: post.o_transaction } }">
                 <font-awesome-icon :icon="['fas', 'history']" />
@@ -179,25 +239,39 @@
               <span v-if="post.referendum.expired" class="text-danger">expired</span>
               <span v-else>expires on {{ new Date(post.referendum.expires_at * 1000).toLocaleString() }}</span>
             </li>
-            <li v-if="post.depth > 0"
+            <li v-if="!is_op"
               class="list-inline-item">
               <a
                 @click.stop
                 v-if="reddit.author"
-                :href="reddit.permalink">
+                target="_blank"
+                :href="'https://reddit.com' + reddit.permalink">
                 <font-awesome-icon :icon="['fab', 'reddit']" />
                 permalink
               </a>
               <router-link
-                @click.stop
+                @click.native.stop
                 v-else-if="post.transaction"
                 :to="perma_link">
                 permalink
               </router-link>
             </li>
             <li class="list-inline-item">
-              <a @click.stop :href="`https://eosq.app/tx/${post.transaction}`">
+              <a @click.stop
+                :href="`https://eosq.app/tx/${post.transaction}`"
+                target="_blank">
                 <font-awesome-icon :icon="['fas', 'link']" />
+              </a>
+            </li>
+            <li class="list-inline-item" v-if="post.depth >= 5">
+              <a
+                @click="
+                  $root.mode = 'zen',
+                  $router.push(zen_mode)
+                "
+                class="hover black follow-discussion"
+              >
+                follow the discussion
               </a>
             </li>
           </ul>
@@ -206,21 +280,22 @@
         <div :class="'quick-reply ' + ((show_quick_reply || show_quick_edit) ? '': 'collapse')"
           :id="'qreply-' + post.data.post_uuid">
           <div class="col-sm-12">
-            <textarea rows="2" class="form-control" placeholder="Content" v-model="quick_reply"></textarea>
+            <textarea @click.stop rows="2" class="form-control" placeholder="Content" v-model="quick_reply"></textarea>
           </div>
           <div class="col-sm-12 text-center" v-if="status">
             <span>{{ status }}</span>
           </div>
           <div class="col-sm-12 mt-1 mb-2">
-            <button v-if="identity.account" type="button" class="btn btn-sm btn-outline-primary" @click="quickReply(false)">{{ show_quick_edit ? 'edit' : 'post' }}</button>
-            <button v-if="show_quick_reply" type="button" class="btn btn-sm btn-outline-primary" @click="quickReply(true)">post anon</button>
+            <button v-if="identity.account" type="button" class="btn btn-sm btn-primary" @click="quickReply(false)">{{ show_quick_edit ? 'Edit' : 'Post' }}</button>
+            <button v-if="show_quick_reply" type="button" class="btn btn-sm btn-primary" @click="quickReply(true)">Post ID</button>
+            <button v-if="identity.account" type="button" class="btn btn-sm btn-primary" @click="addTip()">Tip</button>
           </div>
         </div>
 
         <div class="clearfix"></div>
       </div>
     </div>
-    <template v-if="post.depth <= 5">
+    <template v-if="showChildren && post.depth < 5">
       <div
         v-for="child in post.children"
         :key="child.o_id">
@@ -240,26 +315,27 @@
 </template>
 
 <script>
-import { FORUM_BRAND } from "@/ui/constants";
+import { BRANDS, FORUM_BRAND } from "@/ui/constants";
 import ui from "@/ui";
 import requests from "@/requests";
+import { storage } from "@/storage";
 import { GetIdentity, GetTokensInfo } from "@/eos";
 import { MarkdownParser } from "@/markdown";
 import { moderation } from "@/moderation";
 import PostAttachment from "@/components/core/PostAttachment.vue";
-
+import moment from 'moment';
 import { Post } from "@/types/post";
 
 export default {
   name: "Post",
   components: {
-    PostAttachment,
+    PostAttachment
   },
   props: {
     preview: {
       type: Boolean,
       required: false,
-      default: false,
+      default: false
     },
     post: {
       type: Object,
@@ -269,32 +345,53 @@ export default {
       type: Object,
       required: false,
       default: null
+    },
+    showChildren: {
+      type: Boolean,
+      required: false,
+      default: true
+    },
+    showAsFeed: {
+      type: Boolean,
+      required: false,
+      default: false
     }
   },
   computed: {
+    created_at() {
+      return moment(this.post.createdAt * 1000).fromNow();
+    },
     received_tips() {
-      const tips = {};
+      var tips = {};
       this.post.children.forEach(child => {
         if (child.tips) {
-          child.tips.forEach(tip => {
+          child.tips.filter(t => t.to == this.post.data.poster).forEach(tip => {
             if (tips[tip.symbol] === undefined) {
               tips[tip.symbol] = Number(tip.amount);
             } else {
               tips[tip.symbol] += Number(tip.amount);
             }
-          })
+          });
         }
-      })
+      });
+
+      // fix precisions
+      for (var sym in tips) {
+        tips[sym] = tips[sym].toFixed(4).replace(/([0-9]+(\.[1-9]+)?)(\.?0+$)/,"$1");
+      }
+
       return tips;
     },
     is_multi_referendum() {
-      return this.post.referendum && this.post.referendum.type == 'multi-select-v1';
+      return (
+        this.post.referendum && this.post.referendum.type == "multi-select-v1"
+      );
     },
     multi_vote_value() {
       var value = 0;
       for (var i = 0; i < this.vote_value_multi.length; i++) {
         if (this.vote_value_multi[i]) {
-          value |= (1 << i);
+          value |= 1 << i;
         }
       }
       return value;
@@ -310,14 +407,16 @@ export default {
       );
     },
     is_op() {
-      return !this.post.data.reply_to_poster;
+      return !this.post.data.reply_to_poster || this.showAsFeed;
     },
     offsite() {
       if (
         this.post.data.json_metadata.attachment.type == "url" &&
         this.post.data.json_metadata.attachment.value
       ) {
-        return ui.helpers.GetHost(this.post.data.json_metadata.attachment.value);
+        return ui.helpers.GetHost(
+          this.post.data.json_metadata.attachment.value
+        );
       }
       return null;
     },
@@ -327,11 +426,26 @@ export default {
         : this.post.data.json_metadata.sub;
     },
     selectedPostID() {
-      return this.post.parent ? this.post.parent.o_id : this.thread
-      ? this.thread.o_id || this.thread.o_transaction : this.post.o_id || this.post.o_transaction;
+      return this.post.parent
+        ? this.post.parent.o_id
+        : this.thread
+          ? this.thread.o_id || this.thread.o_transaction
+          : this.post.o_id || this.post.o_transaction;
     },
     selectedPostTitle() {
       return this.thread ? this.thread.getUrlTitle() : this.post.getUrlTitle();
+    },
+    zen_mode() {
+      const id = this.selectedPostID;
+      return {
+        name: "Thread",
+        params: {
+          sub: this.sub,
+          id: id,
+          title: this.selectedPostTitle,
+          child_id: this.post.o_id || this.post.o_transaction,
+        }
+      };
     },
     thread_link() {
       const id = this.selectedPostID;
@@ -340,7 +454,7 @@ export default {
         params: {
           sub: this.sub,
           id: id,
-          title: this.selectedPostTitle,
+          title: this.selectedPostTitle
         }
       };
     },
@@ -348,10 +462,6 @@ export default {
       var link = this.thread_link;
       link.params.child_id = this.post.o_id || this.post.o_transaction;
       return link;
-    },
-    post_content_html() {
-      var md = new MarkdownParser(this.post.data.content, this.post.createdAt);
-      return md.html;
     },
     reddit() {
       return this.post.data.json_metadata.reddit;
@@ -372,28 +482,28 @@ export default {
       }
     },
     thumbnail() {
-      var t = this.post.data.json_metadata.attachment.thumbnail;
-      if (!t) {
-        if (this.reddit.author) {
-          t = "https://cdn.novusphere.io/static/reddit.png";
-        } else {
-          t = FORUM_BRAND.logo;
-        }
-      }
+      let t = null; // = this.post.data.json_metadata.attachment.thumbnail;
+      t = t
+        ? t
+        : this.sub in BRANDS
+          ? BRANDS[this.sub].logo
+          : BRANDS["novusphere"].logo;
       return t;
     }
   },
   async mounted() {
     if (this.$root.icons.length === 0) {
       const response = await GetTokensInfo();
-      const icons = {};
+      var icons = {};
       response.forEach(x => {
         icons[x.symbol] = x;
-      })
+      });
       this.$root.icons = icons;
     }
-    this.hide = this.is_spam ? true : false;
+
     this.identity = await GetIdentity();
+
+    this.hide_spam_threads = storage.moderation.hide_spam_threads;
 
     this.is_spam = await moderation.isBlocked(
       this.post.createdAt,
@@ -401,27 +511,66 @@ export default {
       this.post.data.poster
     );
 
+    this.hide = this.is_spam ? true : false;
+
     this.is_nsfw =
       (this.post.tags && this.post.tags.includes("nsfw")) ||
-      (this.post.depth == 0 &&
+      (this.is_op &&
         (await moderation.isNsfw(
           this.post.createdAt,
           this.post.o_transaction
         )));
   },
   methods: {
+    post_content_html() {
+      let content = this.post.getContent();
+      let token;
+      // this is really rough lol needs to be improved
+      /*if (content.split('#tip')[1]) {
+        token = content.split('#tip')[1].split(' ')[2];
+        content = content.replace(token, `<img width="25" height="25" src="${this.$root.icons[token].logo}" /> `);
+        content = content.replace('#tip', 'tip');
+        content = content.split('@')[0];
+      }*/
+
+      var md = new MarkdownParser(content, this.post.createdAt);
+      return md.html;
+    },
+    goToSub(token) {
+      const brand = Object.keys(BRANDS).find(k => {
+        if (BRANDS[k].token_symbol === token) {
+          return k;
+        }
+      })
+      if (brand && brand !== this.$route.params.sub) {
+        this.$router.push(`/e/${brand}`);
+      } else if (!token && this.sub !== this.$route.params.sub) {
+        this.$router.push(`/e/${this.sub}`);
+      }
+    },
     showQuickEdit() {
       this.show_quick_edit = !this.show_quick_edit;
       this.quick_reply = this.show_quick_edit ? this.post.data.content : "";
 
       this.show_quick_reply = false;
     },
-    showQuickReply() {
+    showQuickReply(e) {
       this.show_quick_reply = !this.show_quick_reply;
       if (this.show_quick_edit) {
         this.quick_reply = "";
       }
       this.show_quick_edit = false;
+    },
+    async addTip() {
+      var brand = BRANDS["novusphere"];
+      if (BRANDS[this.sub] && BRANDS[this.sub].token_symbol) {
+        brand = BRANDS[this.sub];
+      }
+
+      const tip_amount = brand.default_tip || '1';
+      const tip = `#tip ${tip_amount} ${brand.token_symbol} @${this.post.data.poster}`;
+
+      this.quick_reply += ' ' + tip;
     },
     async upvote() {
       if (this.post.my_vote) {
@@ -451,7 +600,7 @@ export default {
           this.post.data.reply_to_poster || this.post.data.poster, // thread creator
         reply_to_post_uuid:
           this.post.data.reply_to_post_uuid || this.post.data.post_uuid, // thread uuid
-        certify: 0,
+        certify: false,
         content: content,
         post_uuid: ui.helpers.GeneratePostUuid(),
         json_metadata: JSON.stringify({
@@ -518,10 +667,12 @@ export default {
         : this.referendum_colors[i];
     },
     async referendumClean() {
-      await ui.actions.Referendum.CleanProposal(this.post.transaction);
+      await ui.actions.Referendum.CleanProposal(
+        this.post.referendum.transaction
+      );
     },
     async referendumExpire() {
-      await ui.actions.Referendum.Expire(this.post.transaction);
+      await ui.actions.Referendum.Expire(this.post.referendum.transaction);
     },
     async referendumVote() {
       if (!this.identity.account) {
@@ -535,7 +686,7 @@ export default {
       }
 
       var txid = await ui.actions.Referendum.Vote(
-        this.post.transaction,
+        this.post.referendum.transaction,
         this.is_multi_referendum ? this.multi_vote_value : this.vote_value
       );
       alert(
@@ -550,10 +701,22 @@ export default {
       this.hide = !this.hide;
       this.$forceUpdate();
     },
+    openPost() {
+      if (screen.width > 600) {
+        this.$emit(
+          "openPost",
+          this.selectedPostID,
+          this.post.data.json_metadata.sub,
+          this.selectedPostTitle
+        );
+      } else {
+        this.$router.push(this.thread_link);
+      }
+    }
   },
   data() {
     return {
-      vote_value_multi: [ 0, 0, 0, 0, 0, 0, 0, 0 ],
+      vote_value_multi: [0, 0, 0, 0, 0, 0, 0, 0],
       vote_value: 0,
       referendum_colors: [
         "#dc3545",
@@ -572,13 +735,32 @@ export default {
       quick_reply: "",
       is_nsfw: false,
       is_spam: false,
-      hide: false,
+      hide_spam_threads: false,
+      hide: false
     };
   }
 };
 </script>
 
 <style scoped>
+.fas {
+  font-size: 20px;
+  margin-bottom: -3px;
+}
+.reply {
+  color: teal!important;
+  border: 1px solid teal;
+  border-radius: 4px;
+  padding: 2px;
+}
+.follow-discussion {
+  border-radius: 5px;
+  padding: 2px;
+  border: 1px solid black;
+}
+.black {
+  color: black !important;
+}
 .referendum {
   display: none;
 }
@@ -586,30 +768,75 @@ export default {
   display: inherit;
 }
 .post-toggle {
-  height: 20px;
   color: black;
   display: flex;
   align-items: center;
+  white-space: nowrap;
+  flex-wrap: wrap;
+}
+.post-toggle .date {
+  font-size: 12px;
 }
 .toggle-icon {
   margin-right: 5px;
 }
-.post-toggle:hover, .reply:hover {
-  cursor:pointer;
+.post-toggle:hover,
+.reply:hover,
+.up:hover,
+.title:hover {
+  cursor: pointer;
 }
 
 .tip-icon {
   height: 25px !important;
-  width: 25px!important;
-}
-.date {
-  margin-left: 15px;
+  width: 25px !important;
 }
 .tip-amount {
   margin: 3px;
 }
 .received-tips {
-  margin-left: 10px;
   margin-right: 10px;
+}
+.post-icon {
+  width: 50px;
+  margin-right: 15px;
+}
+.post-icon img {
+  max-width: 50px!important;
+}
+.userinfo {
+  display: flex;
+}
+.tip:hover {
+  cursor: pointer;
+}
+.hover:hover {
+  cursor: pointer;
+}
+.checkbox {
+  height: 100%;
+  margin-right: 5px;
+  margin-left: 5px;
+}
+.title {
+  color: black!important;
+  font-weight: bold;
+  font-size: 18px;
+}
+.op-upvote {
+  margin-top:5px;
+  display: flex;
+  flex:1;
+  justify-content:flex-end;
+}
+.op-upvote .up {
+  white-space:nowrap;
+}
+.post-parent .op-posttext {
+  margin-top: 10px;
+  margin-bottom: 30px;
+}
+.up {
+  color: black!important;
 }
 </style>

@@ -1,7 +1,10 @@
+import jQuery from 'jquery';
 import { storage } from "@/storage";
+import ui from "@/ui";
 import requests from "@/requests";
+import { GetUserIcons } from "@/usericon";
 
-import { GetEOS, EOSBinaryReader, GetTokensInfo, GetTokenPrecision } from "@/eos";
+import { GetEOS, GetTransaction, EOSBinaryReader, GetTokensInfo, GetTokenPrecision } from "@/eos";
 
 import { PostReddit } from "./reddit";
 import { PostAttachment } from "./attachment";
@@ -46,8 +49,8 @@ async function DecensorData(txid, data) {
         return data;
     }
 
-    const eos = GetEOS();
-    const tx = await eos.getTransaction(txid);
+    //const eos = GetEOS();
+    const tx = await GetTransaction(txid);
 
     var hex = tx.trx.trx.actions[0].data;
     var rdr = new EOSBinaryReader(hex);
@@ -119,7 +122,11 @@ class Post {
             responses[i].children.sort((a, b) => b.score - a.score);
         }
 
-        return new_posts;
+        return {
+            new_posts: new_posts,
+            responses: responses,
+            map: commentMap
+        };
     }
 
     constructor(post) { // post is from mongodb
@@ -128,36 +135,15 @@ class Post {
         if (post && post.name == 'propose') {
             var data = post.data;
 
-            post.referendum = {
-                type: post.data.proposal_json.type || REFERENDUM_TYPES[0],
-                name: post.data.proposal_name,
-                expired: Array.isArray(post.expired) ? (post.expired.length > 0) : post.expired,
-                expires_at: data.expires_at,
-                options: [],
-                details: null
-            };
-
-            // set to default so we know how to display
-            if (!REFERENDUM_TYPES.some(o => o == post.referendum.type)) {
-                post.referendum.type = REFERENDUM_TYPES[0];
-            }
-
-            if (post.referendum.type == REFERENDUM_TYPES[0] || post.referendum.type == REFERENDUM_TYPES[1]) // yn
-                post.referendum.options = REFERENDUM_OPTIONS_YN;
-            else if (post.referendum.type == REFERENDUM_TYPES[2]) // yna
-                post.referendum.options = REFERENDUM_OPTIONS_YNA;
-            else if (post.referendum.type == REFERENDUM_TYPES[3]) // options
-                post.referendum.options = (post.data.proposal_json.options || REFERENDUM_OPTIONS_YN).slice(0, 255);
-            else if (post.referendum.type == REFERENDUM_TYPES[4]) // multi
-                post.referendum.options = (post.data.proposal_json.options || REFERENDUM_OPTIONS_YN).slice(0, 8);
+            this.setReferendum(post, post);
 
             post.data = {
                 poster: data.proposer,
                 post_uuid: 'ref-' + post.transaction,
-                content: data.proposal_json.content ? data.proposal_json.content : '',
+                content: '',
                 reply_to_poster: '',
                 reply_to_post_uuid: '',
-                certify: 0,
+                certify: false,
                 json_metadata: {
                     title: data.title,
                     type: "novusphere-forum",
@@ -188,12 +174,13 @@ class Post {
             parent: null,
             my_vote: null,
             referendum: null,
-            tags: []
+            tags: [],
+            replies: []
 
         }, post);
 
         this._post = post;
-
+        this._content = '';
         this.score = post.score;
         this.parent = null;
         this.depth = 0;
@@ -209,6 +196,7 @@ class Post {
         this.referendum = post.referendum;
         this.tags = post.tags;
         this.tips = [];
+        this.replies = post.replies;
 
         if (storage.settings.atmos_upvotes) {
             this.up = Math.floor(this.up + (post.up_atmos ? post.up_atmos : 0));
@@ -222,36 +210,41 @@ class Post {
         this.o_attachment = new PostAttachment(this.data.json_metadata.attachment);
     }
 
-    async normalize() {
-        if (!this._post) {
-            return;
+    setReferendum(post, src) {
+        post.referendum = {
+            transaction: src.transaction,
+            type: src.data.proposal_json.type || REFERENDUM_TYPES[0],
+            name: src.data.proposal_name,
+            content: src.data.proposal_json.content,
+            expired: Array.isArray(src.expired) ? (src.expired.length > 0) : src.expired,
+            expires_at: src.data.expires_at,
+            options: [],
+            details: null
+        };
+
+        // set to default so we know how to display
+        if (!REFERENDUM_TYPES.some(o => o == post.referendum.type)) {
+            post.referendum.type = REFERENDUM_TYPES[0];
         }
 
-        var post = this._post;
-        this._post = null;
-        post.data = await DecensorData(post.transaction, post.data);
+        if (post.referendum.type == REFERENDUM_TYPES[0] || post.referendum.type == REFERENDUM_TYPES[1]) // yn
+            post.referendum.options = REFERENDUM_OPTIONS_YN;
+        else if (post.referendum.type == REFERENDUM_TYPES[2]) // yna
+            post.referendum.options = REFERENDUM_OPTIONS_YNA;
+        else if (post.referendum.type == REFERENDUM_TYPES[3]) // options
+            post.referendum.options = (src.data.proposal_json.options || REFERENDUM_OPTIONS_YN).slice(0, 255);
+        else if (post.referendum.type == REFERENDUM_TYPES[4]) // multi
+            post.referendum.options = (src.data.proposal_json.options || REFERENDUM_OPTIONS_YN).slice(0, 8);
+    }
 
-        this.data = new PostData(post.data, this.createdAt);
-        this.o_attachment = new PostAttachment(this.data.json_metadata.attachment);
-
-        if (post.recent_edit) {
-            await this.applyEdit(post.recent_edit);
-        }
-
-        if (post.parent) {
-            this.parent = new Post(post.parent);
-            await this.parent.normalize();
-
-            this.data.json_metadata.title = this.parent.data.json_metadata.title;
-        }
-
-        if (post.referendum) {
-            if (isNaN(post.referendum.expires_at)) {
-                post.referendum.expires_at = (new Date(post.referendum.expires_at)).getTime() / 1000;
+    async setReferendumDetails() {
+        if (this.referendum) {
+            if (isNaN(this.referendum.expires_at)) {
+                this.referendum.expires_at = (new Date(this.referendum.expires_at)).getTime() / 1000;
             }
 
-            if (post.referendum.expires_at <= (new Date()).getTime() / 1000) {
-                post.referendum.expired = true;
+            if (this.referendum.expires_at <= (new Date()).getTime() / 1000) {
+                this.referendum.expired = true;
             }
 
             const rcache = await GetReferendumCache();
@@ -260,14 +253,14 @@ class Post {
 
             var votes = {};
 
-            for (var i = 0; i < post.referendum.options.length; i++) {
+            for (var i = 0; i < this.referendum.options.length; i++) {
                 votes[i] = { value: 0, percent: 0 };
             }
 
             if (status) {
                 var staked_total = status.stats.staked.total;
 
-                if (post.referendum.type == REFERENDUM_TYPES[4]) { // multi
+                if (this.referendum.type == REFERENDUM_TYPES[4]) { // multi
                     staked_total = 0;
                 }
 
@@ -279,9 +272,9 @@ class Post {
                     var vote_result = status.stats.staked[vote_value];
                     vote_result = (isNaN(vote_result) ? 0 : parseInt(vote_result)) / 10000;
 
-                    if (post.referendum.type == REFERENDUM_TYPES[4]) { // multi
+                    if (this.referendum.type == REFERENDUM_TYPES[4]) { // multi
 
-                        for (var i = 0; i < post.referendum.options.length; i++) {
+                        for (var i = 0; i < this.referendum.options.length; i++) {
                             if ((vote_value & (1 << i)) != 0) {
                                 if (i in votes)
                                     votes[i].value += vote_result;
@@ -317,13 +310,38 @@ class Post {
                 total_eos: (status ? status.stats.staked.total : 0) / 10000,
             }
         }
+    }
 
-        if (!this.data.json_metadata.attachment.value) {
-            await this.detectAttachment();
+    async normalize() {
+        if (!this._post) {
+            return;
         }
 
+        var post = this._post;
+        this._post = null;
+        post.data = await DecensorData(post.transaction, post.data);
+
+        this.data = new PostData(post.data, this.createdAt);
+        this.o_attachment = new PostAttachment(this.data.json_metadata.attachment);
+        this.user_icons = await GetUserIcons(this.data.poster);
+
+        if (post.recent_edit) {
+            await this.applyEdit(post.recent_edit);
+        }
+
+        if (post.parent) {
+            this.parent = new Post(post.parent);
+            await this.parent.normalize();
+
+            this.data.json_metadata.title = this.parent.data.json_metadata.title;
+        }
+
+        await this.detectAttachment();
+        this.detectInlineAttachment();
+        await this.detectContent();
+        await this.setReferendumDetails();
         await this.data.json_metadata.attachment.normalize();
-        await this.detectTip();
+        this.detectTip(); // load without waiting in context (await)
     }
 
     async detectTip() {
@@ -333,9 +351,9 @@ class Post {
 
         if (this.tags.includes('tip')) {
             const eos = GetEOS();
-            const tx = await eos.getTransaction(this.transaction);
+            const tx = await GetTransaction(this.transaction);
             const actions = tx.trx.trx.actions;
-            
+
             for (var i = 0; i < actions.length; i++) {
                 if (actions[i].name == 'transfer') {
 
@@ -343,7 +361,7 @@ class Post {
 
                     const from = rdr.readName();
                     const to = rdr.readName();
-                    
+
                     // this should really be an i64
                     var amount = rdr.readInt32();
                     rdr.readInt32();
@@ -372,8 +390,152 @@ class Post {
         }
     }
 
+    getContent() {
+        var str = this._content || this.data.content || '';
+        if (this.referendum) {
+            if (str) {
+                str += '\n\n---\n\n';
+            }
+            str += this.referendum.content;;
+        }
+
+        return str;
+    }
+
+    async detect() {
+        
+    }
+
+    async detectContent() {
+        var content = this.data.content;
+
+        // detect images
+        const rx = /(.|)http[s]?:\/\/(\w|[:\/\.%-])+\.(png|jpg|jpeg|gif)(\?(\w|[:\/\.%-])+)?(.|)/g;
+        content = content.replace(rx, function (x) {
+            var tx = x.trim();
+            if (!tx.startsWith('http')) {
+                return x;
+            }
+            return `![](${tx})`;
+        });
+
+        this._content = content;
+    }
+
+    async detectInlineAttachment() {
+        var attachment = this.data.json_metadata.attachment;
+        const attachment_val = attachment.value;
+
+        if (!attachment_val) {
+            return;
+        }
+
+        if (attachment_val.startsWith('https://medium.com')) {
+            // TO-DO: medium parser...
+        }
+
+        if (attachment_val.startsWith('https://trybe.one/')) {
+            try {
+                var cors_html = await requests.get('https://db.novusphere.io/service/cors/?' + attachment_val);
+                var cors_jq = jQuery(cors_html).find('div[class="entry-content"]');
+                cors_jq.find('div[class*="essb_links"]').remove();
+                cors_jq.find('div[class*="post-ratings"]').remove();
+                cors_jq.find('div[class*="post-ratings-loading"]').remove();
+
+                // replace images with proxy for hotlinking
+                cors_jq.find('img').each(function () {
+                    const cors_img = 'https://images.weserv.nl/?url=';
+                    var $this = jQuery(this);
+                    $this.prop('src', cors_img + $this.prop('src'));
+
+                    const srcset = $this.prop('srcset');
+                    if (srcset) {
+                        $this.prop('srcset', srcset.split(', ').map(i => cors_img + i).join(', '));
+                    }
+                });
+
+                attachment.type = 'markdown';
+                attachment.display = 'markdown';
+                attachment.value = '**Source:** ' + attachment_val + ' \n\n----\n\n' + cors_jq.html();
+            }
+            catch (ex) {
+                console.log(ex);
+            }
+        }
+
+        if (attachment_val.startsWith('https://whaleshares.io')) {
+            try {
+                const ws_args = attachment_val.substring(attachment_val.indexOf('.io')+3).split('/');
+                const ws_name = (ws_args[1] || '').substring(1);
+                const ws_post_id = ws_args[2];
+
+                const ws_api = await requests.get(`https://api.whaleshares.io/rest2jsonrpc/database_api/get_content?params=["${ws_name}","${ws_post_id}"]`);
+                //console.log(ws_api);
+                
+                var ws_html = ws_api.result.body;
+                ws_html = ws_html.replace(/!\[\]\(https:\/\/whaleshares\.io.+[a-zA-Z0-9]+\)/g, (old) => {
+                    var old_trim = old.trim();
+                    old_trim = old_trim.substring(4, old_trim.length-1);
+                    return `<img src="${old_trim}">`;
+                });
+
+
+                attachment.type = 'markdown';
+                attachment.display = 'markdown';
+                attachment.value = '**Source:** ' + attachment_val + ' \n\n----\n\n' + ws_html;
+            }
+            catch (ex) {
+                console.log(ex);
+            }
+        }
+
+        if (attachment_val.startsWith('https://steemit.com')) {
+            try {
+                var cors_html = await requests.get('https://db.novusphere.io/service/cors/?' + attachment_val);
+                var cors_jq = jQuery(cors_html);
+
+                
+                    var canonical = cors_html.indexOf('link rel="canonical"');
+                    if (canonical > -1) {
+                        canonical = cors_html.substring(canonical + 27, cors_html.indexOf('"', canonical + 27)).toLowerCase();
+
+                        if (canonical.indexOf('steemit.com') > -1 && canonical != attachment_val.toLowerCase()) {
+                            cors_html = await requests.get('https://db.novusphere.io/service/cors/?' + canonical);
+                            cors_jq = jQuery(cors_html);
+                        }
+                    }
+
+                cors_jq = cors_jq.find('div[class*="MarkdownViewer"]');
+
+                attachment.type = 'markdown';
+                attachment.display = 'markdown';
+                attachment.value = '**Source:** ' + attachment_val + ' \n\n----\n\n' + cors_jq.html();
+            }
+            catch (ex) {
+                console.log(ex);
+            }
+        }
+    }
+
     async detectAttachment() {
         var attachment = this.data.json_metadata.attachment;
+
+        if (attachment.value &&
+            attachment.display == 'referendum') {
+
+            const rp = await ui.actions.Referendum.GetProposal(attachment.value);
+            if (rp) {
+                this.setReferendum(this, rp);
+            }
+
+            return;
+        }
+
+        // detect automatic
+
+        if (attachment.value) {
+            return;
+        }
 
         var attach = (v, t, d) => {
             attachment.value = v;
@@ -383,12 +545,25 @@ class Post {
 
         const filters = [
             { // youtube
-                match: /https:\/\/youtu.be\/[a-zA-Z0-9-_]+/,
-                handle: (m) => attach(m[0], 'url', 'iframe')
+                match: /https:\/\/youtu.be\/[a-zA-Z0-9-_]+/i,
+                handle: (m) => attach(m[0], 'url', 'link')
             },
             { // youtube 2
-                match: /https:\/\/www.youtube.com\/watch\?v=[a-zA-Z0-9-_]+/,
-                handle: (m) => attach(m[0], 'url', 'iframe')
+                match: /https:\/\/www.youtube.com\/watch\?v=[a-zA-Z0-9-_]+/i,
+                handle: (m) => attach(m[0], 'url', 'link')
+            },
+            {
+                match: /https:\/\/twitter.com\/[a-zA-Z0-9-_]+\/status\/[0-9]+/i,
+                handle: (m) => attach(m[0], 'url', 'link')
+            },
+            {
+                match: /https:\/\/t.me\/[\w]+\/[0-9]+/i,
+                handle: (m) => attach(m[0], 'url', 'link')
+            },
+            {
+                
+                match: /https:\/\/medium.com\/@[\w]+\/.+/i,
+                handle: (m) => attach(m[0], 'url', 'link')
             }
         ];
 
@@ -409,6 +584,7 @@ class Post {
         this.transaction = edit.transaction;
         this.id = edit.id;
 
+        this._content = '';
         this.data.content = edit.data.content;
         this.data.json_metadata.edit = true;
 
@@ -418,6 +594,10 @@ class Post {
 
         if (edit.data.json_metadata.attachment) {
             this.data.json_metadata.attachment = new PostAttachment(edit.data.json_metadata.attachment);
+            await this.detectAttachment();
+            this.detectInlineAttachment();
+            await this.detectContent();
+            await this.setReferendumDetails();
         }
     }
 
@@ -442,7 +622,7 @@ class Post {
     getUrlTitle() {
         var title = this.getTitle();
         var friendly = title;
-        friendly = friendly.replace(/ /g, "_");
+        friendly = friendly.replace(/\W/g, "_");
         return friendly;
     }
 

@@ -10,10 +10,11 @@ export default async function Thread(id, child_id) {
     
     var main_post = (await novusphere.api({
         aggregate: novusphere.config.collection_forum,
-        maxTimeMS: 1000,
+        maxTimeMS: 7500,
         cursor: {},
         pipeline: [
             { $match: novusphere.query.match.threadById(id) },
+            { $limit: 1 },
             { $lookup: novusphere.query.lookup.postState() },
             { $lookup: novusphere.query.lookup.postMyVote(identity.account) },
             {
@@ -25,6 +26,15 @@ export default async function Thread(id, child_id) {
         ]
     })).cursor.firstBatch[0];
 
+    // thread not found
+    if (!main_post || !main_post.transaction) {
+        return {
+            opening_post: null,
+            main_post: null,
+            count: 0
+        }
+    }
+
     main_post = new Post(main_post);
     await main_post.normalize();
 
@@ -32,7 +42,7 @@ export default async function Thread(id, child_id) {
         // look for extension
         var content_ext = (await novusphere.api({
             aggregate: novusphere.config.collection_nsdb,
-            maxTimeMS: 1000,
+            maxTimeMS: 7500,
             cursor: {},
             pipeline: [
                 {
@@ -60,7 +70,7 @@ export default async function Thread(id, child_id) {
     for (; ;) {
         var _responses = (await novusphere.api({
             aggregate: novusphere.config.collection_forum,
-            maxTimeMS: 1000,
+            maxTimeMS: 7500,
             cursor: {},
             pipeline: [
                 { $match: novusphere.query.match.threadReplies(main_post.data.post_uuid) },
@@ -85,10 +95,9 @@ export default async function Thread(id, child_id) {
             break;
     }
 
-    var new_posts = await Post.threadify(main_post, responses);
-
-    responses.splice(0, 0, main_post);
-    responses = await Post.fromArray(responses);
+    var threadify = await Post.threadify(main_post, responses);
+    var new_posts = threadify.new_posts;
+    responses = threadify.responses;
 
     // only count non-edits for new_posts length
     storage.new_posts[main_post.data.post_uuid] = {
@@ -107,10 +116,20 @@ export default async function Thread(id, child_id) {
 
         var child_post;
         if (child_id.length == 64) {
-            child_post = responses.find(p => p.transaction == child_id);
+            child_post = responses.find(p => p.o_transaction == child_id);
         } else {
             child_id = parseInt(child_id);
             child_post = responses.find(p => p.o_id == child_id);
+        }
+
+        // go one up
+        if (child_post.depth >= 1) {
+            // remove all other children
+            var one_up = threadify.map[child_post.data.json_metadata.parent_uuid];
+            one_up.children.length = 0;
+            one_up.children.push(child_post);
+            
+            child_post = one_up;
         }
 
         child_post.parent = main_post;
@@ -131,6 +150,7 @@ export default async function Thread(id, child_id) {
 
     return {
         opening_post: op,
-        main_post: main_post
+        main_post: main_post,
+        count: responses.length
     }
 }

@@ -11,23 +11,54 @@ const REFERENDUM_CONTRACT = "eosio.forum";
 export default {
     async GetProposal(txid) {
         const novusphere = GetNovusphere();
-        var prop = (await novusphere.api({
-            find: REFERENDUM_COLLECTION,
-            maxTimeMS: 5000,
-            filter: {
-                name: "propose",
-                transaction: txid
-            }
-        })).cursor.firstBatch[0];
 
-        return prop;
+        const MATCH_QUERY = {
+            name: "propose",
+            transaction: txid
+        };
+
+        const LOOKUP_EXPIRED = {
+            from: REFERENDUM_COLLECTION,
+            let: {
+                proposal_name: "$data.proposal_name",
+                createdAt: "$createdAt"
+            },
+            pipeline: [
+                { $match: { name: "clnproposal" } },
+                {
+                    $project: {
+                        txid: "$transaction",
+                        test: {
+                            $and: [
+                                { $eq: ["$data.proposal_name", "$$proposal_name"] },
+                                { $gte: ["$createdAt", "$$createdAt"] }
+                            ]
+                        }
+                    }
+                },
+                { $match: { test: true } }
+            ],
+            as: "expired"
+        };
+
+        var prop = (await novusphere.api({
+            aggregate: REFERENDUM_COLLECTION,
+            maxTimeMS: 7500,
+            cursor: {},
+            pipeline: [
+                { $match: MATCH_QUERY },
+                { $lookup: LOOKUP_EXPIRED },
+            ]
+        })).cursor.firstBatch;
+
+        return (prop && prop.length > 0) ? prop[0] : null;
     },
     async GetVotes(prop) {
         var novusphere = GetNovusphere();
 
         var votes = (await novusphere.api({
             find: REFERENDUM_COLLECTION,
-            maxTimeMS: 1000,
+            maxTimeMS: 7500,
             filter: {
                 name: "vote",
                 "data.proposal_name": prop.data.proposal_name,
@@ -38,7 +69,7 @@ export default {
 
         var unvotes = (await novusphere.api({
             find: REFERENDUM_COLLECTION,
-            maxTimeMS: 1000,
+            maxTimeMS: 7500,
             filter: {
                 name: "unvote",
                 "data.proposal_name": prop.data.proposal_name,

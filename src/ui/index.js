@@ -1,9 +1,11 @@
 import { GetNovusphere } from "@/novusphere";
-import { GetEOS } from "@/eos";
-import { storage } from "@/storage";
+import { GetEOS, GetIdentity } from "@/eos";
+import { storage, SaveStorage } from "@/storage";
+import { LoadAccountState, SaveAccountState } from "@/accountstate";
 
 // views
 import Home from "./views/Home";
+import Feed from "./views/Feed";
 import Tag from "./views/Tag";
 import PostHistory from "./views/PostHistory";
 import Thread from "./views/Thread";
@@ -16,7 +18,8 @@ import Referendum from "./views/Referendum";
 import CheckCreateThread from "./actions/CheckCreateThread";
 import Subscribe from "./actions/Subscribe";
 import MarkNotificationsAsRead from "./actions/MarkNotificationsAsRead";
-import BlockUser from "./actions/BlockUser";
+import ToggleBlockUser from "./actions/ToggleBlockUser";
+import ToggleFollowUser from "./actions/ToggleFollowUser";
 import UpvotePaid from "./actions/UpvotePaid";
 import UpvoteFree from "./actions/UpvoteFree";
 import GetReccomendedModList from "./actions/GetReccomendedModList";
@@ -25,10 +28,15 @@ import ReferendumActions from "./actions/Referendum";
 
 // helpers
 import UIHelpers from "./helpers";
-import { GetIdentity } from "../eos";
 
 // constants
 import { FORUM_BRAND } from "./constants";
+
+window.addEventListener('identity', async function() {
+    await LoadAccountState();
+    await SaveAccountState();
+    SaveStorage();
+});
 
 window.addEventListener('identityUpdate', async function () {
     //console.log('identity' + Math.random());
@@ -37,7 +45,7 @@ window.addEventListener('identityUpdate', async function () {
     const identity = await GetIdentity();
 
     var atmos = parseFloat(
-        (await eos.getCurrencyBalance(
+        (await eos.rpc.get_currency_balance(
             "novusphereio",
             identity.account,
             "ATMOS"
@@ -45,11 +53,12 @@ window.addEventListener('identityUpdate', async function () {
     );
 
     var token = atmos;
-    if (FORUM_BRAND.token_contract != 'novusphereio' ||
-        FORUM_BRAND.token_symbol != 'ATMOS') {
+    if (FORUM_BRAND.token_contract &&
+        (FORUM_BRAND.token_contract != 'novusphereio' ||
+        FORUM_BRAND.token_symbol != 'ATMOS')) {
             
         token = parseFloat(
-            (await eos.getCurrencyBalance(
+            (await eos.rpc.get_currency_balance(
                 FORUM_BRAND.token_contract,
                 identity.account,
                 FORUM_BRAND.token_symbol
@@ -60,7 +69,7 @@ window.addEventListener('identityUpdate', async function () {
     const novusphere = GetNovusphere();
     const notifications = (await novusphere.api({
         aggregate: novusphere.config.collection_forum,
-        maxTimeMS: 1000,
+        maxTimeMS: 7500,
         cursor: {},
         pipeline: [
             {
@@ -81,6 +90,7 @@ window.addEventListener('identityUpdate', async function () {
 export default {
     views: {
         Home,
+        Feed,
         Tag,
         Thread,
         UserNotifications,
@@ -93,7 +103,8 @@ export default {
         CheckCreateThread,
         Subscribe,
         MarkNotificationsAsRead,
-        BlockUser,
+        ToggleBlockUser,
+        ToggleFollowUser,
         UpvotePaid,
         UpvoteFree,
         GetReccomendedModList,

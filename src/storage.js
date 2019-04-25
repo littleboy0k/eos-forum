@@ -4,9 +4,11 @@ import ecc from "eosjs-ecc";
 const MAX_TRACK_NEW_POSTS = 1000;
 
 var DEFAULT_STORAGE = {
-    version: 15,
+    version: 18,
     eos_referendum: true,
-    subscribed_subs: ["all", "novusphere", "eos", "anon", "anon-r-eos", "anon-pol-econ", "music", "anon-bounties"],
+    subscribed_subs: ["all", "novusphere", "eos", "anon-r-eos", "anon-pol-econ"],
+    unsubscribed_subs: [], // used with syncing from default list
+    following: [], // users being followed
     new_posts: {},
     last_notification: 0,
     moderation: {
@@ -15,15 +17,17 @@ var DEFAULT_STORAGE = {
         accounts: [],
         transactions: []
     },
+    accountstate: {}, // session keys
     anon_id: {
         name: '',
         key: ''
     },
     settings: {
         atmos_upvotes: true,
-        scatter_timeout: 1500,
+        scatter_timeout: 3000,
         theme: "https://eos-forum.org/static/css/theme/day.css",
         novusphere_api: "https://db.novusphere.io",
+        //novusphere_api: "http://localhost:8099",
         eos_api: {
             host: "eos.greymass.com", // ( or null if endorsed chainId )
             port: "443", // ( or null if defaulting to 80 )
@@ -31,28 +35,6 @@ var DEFAULT_STORAGE = {
         }
     }
 };
-
-window.__PRESETS__ = window.localStorage.getItem('presets');
-if (window.__PRESETS__) {
-    console.log('Found presets');
-
-    try {
-        window.__PRESETS__ = JSON.parse(window.__PRESETS__);
-        console.log('Loaded presets');
-    }
-    catch (ex) {
-        window.__PRESETS__ = null;
-        console.log('Failed to load presets');
-        console.log(ex);
-    }
-
-    if (window.__PRESETS__.storage) {
-        DEFAULT_STORAGE = jQuery.extend(true, DEFAULT_STORAGE, window.__PRESETS__.storage);
-        if (window.__PRESETS__.storage.subscribed_subs) {
-            DEFAULT_STORAGE.subscribed_subs = window.__PRESETS__.storage.subscribed_subs;
-        }
-    }
-}
 
 var storage = jQuery.extend(true, {}, DEFAULT_STORAGE);
 
@@ -86,25 +68,42 @@ function importStorage(obj) {
         else if (obj.version < 15) {
             obj.anon_id = storage.anon_id;
         }
+        else if (obj.version < 16) {
+            obj.accountstate = {};
+        }
+        else if (obj.version < 17) {
+            obj.unsubscribed_subs = [];
+        }
+        else if (obj.version < 18) {
+            obj.following = [];
+        }
 
         obj.version++;
     }
 
     if (obj.version >= storage.version) {
         storage = obj;
+
+        // import possibly new default subs
+        SyncDefaultSubs();
+
+        // santization
+        storage.following = storage.following.filter(f => f);
+
         console.log('Loaded storage version ' + storage.version);
         //console.log(storage);
         return true;
     }
+
     console.log('Loaded storage failed');
     return false;
 }
 
-window.__getStorage = function() {
+window.__getStorage = function () {
     return storage;
 }
 
-window.__saveStorage = function() {
+window.__saveStorage = function () {
     SaveStorage();
 }
 
@@ -117,6 +116,20 @@ window.__forgetSettings = function () {
     storage.settings = DEFAULT_STORAGE.settings;
     SaveStorage();
     window.location.reload();
+}
+
+function SyncDefaultSubs() {
+    for (var i = 0; i < DEFAULT_STORAGE.subscribed_subs.length; i++) {
+        const sub = DEFAULT_STORAGE.subscribed_subs[i];
+        if (!storage.subscribed_subs.includes(sub) &&
+            !storage.unsubscribed_subs.includes(sub)) {
+
+            storage.subscribed_subs.push(sub);
+        }
+    }
+
+    // sort alphabetically
+    storage.subscribed_subs = storage.subscribed_subs.sort();
 }
 
 function SaveStorage() {
@@ -133,6 +146,25 @@ function SaveStorage() {
     //console.log(storage);
 }
 
+async function InitStorage() {
+
+    if (window.__PRESETS__) {
+        if (window.__PRESETS__.storage) {
+            const p_storage = window.__PRESETS__.storage;
+    
+            DEFAULT_STORAGE = jQuery.extend(true, DEFAULT_STORAGE, p_storage);
+            if (p_storage.subscribed_subs) {
+                DEFAULT_STORAGE.subscribed_subs = p_storage.subscribed_subs;
+            }
+
+            // assign deep copy
+            Object.assign(storage, JSON.parse(JSON.stringify(DEFAULT_STORAGE)));
+        }
+    }
+
+    await LoadStorage();
+}
+
 async function LoadStorage() {
     var oldStorageJson = window.localStorage.getItem('eosforum');
     var oldStorage;
@@ -142,12 +174,18 @@ async function LoadStorage() {
             console.log('Failed to import/migrate storage');
             console.log(oldStorageJson);
         }
-        SaveStorage();
     }
     catch (ex) {
         console.log('Failed to load storage');
         console.log(ex);
     }
+
+    // generate anon identity if we don't have one
+    if (!storage.anon_id.key) {
+        storage.anon_id.key = await ecc.randomKey();
+    }
+
+    SaveStorage();
 }
 
-export { DEFAULT_STORAGE, storage, SaveStorage, LoadStorage };
+export { DEFAULT_STORAGE, storage, SaveStorage, LoadStorage, InitStorage, SyncDefaultSubs };

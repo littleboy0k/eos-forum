@@ -1,14 +1,14 @@
 <template>
   <div>
     <button v-if="current_page>1"
-      class="btn btn-outline-primary"
+      class="btn btn-primary"
       v-on:click="page(-1)">
-      <font-awesome-icon :icon="['fas', 'arrow-left']" ></font-awesome-icon> prev
+      <font-awesome-icon :icon="['fas', 'arrow-left']" />
     </button>
     <button v-if="current_page<pages"
-      class="btn btn-outline-primary"
+      class="btn btn-primary"
       v-on:click="page(1)">
-      next <font-awesome-icon :icon="['fas', 'arrow-right']" ></font-awesome-icon>
+      <font-awesome-icon :icon="['fas', 'arrow-right']" />
     </button>
   </div>
 </template>

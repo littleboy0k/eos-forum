@@ -19,23 +19,84 @@ class NovusphereAdapter {
         var result = await requests.get(endpoint);
         return result;
     }
-    async anonymousPost(post) {
+    async getApiEnabled(endpoint, field) {
         //
-        // check whether if our current api end point has an anon service
+        // check whether if our current api end point has an api enabled
         //
         try {
-            if (this._anonymous_post == undefined) {
-                var check = await requests.get(this.config.url + '/service/anon/');
-                this._anonymous_post = check.enabled;
+            if (this[field] == undefined) {
+                var check = await requests.get(this.config.url + endpoint);
+                this[field] = check.enabled;
             }
         }
         catch (ex) {
-            this._anonymous_post = false;
+            this[field] = false;
         }
 
-        var endpoint = this._anonymous_post ?
-            (this.config.url + '/service/anon/post') :
-            'https://db.novusphere.io/service/anon/post';
+        if (this[field]) {
+            return (this.config.url);
+        }
+
+        return 'https://db.novusphere.io';
+    }
+    async authorizeAccountState(name, key, nonce, sig) {
+        var endpoint = (await this.getApiEnabled('/service/accountstate/', "_account_state")) +
+            '/service/accountstate/authorize';
+
+        var result = await requests.post(endpoint, {
+            value: JSON.stringify({
+                name: name,
+                key: key,
+                nonce: nonce,
+                sig: sig
+            })
+        });
+
+        return result;
+    }
+    async isAccountStateAuthorized(session_key, name, key) {
+        var endpoint = (await this.getApiEnabled('/service/accountstate/', "_account_state")) +
+            '/service/accountstate/authorized';
+
+        endpoint += '?session_key=' + session_key;
+        endpoint += '&key=' + key;
+        endpoint += '&name=' + name;
+
+        var result = await requests.get(endpoint);
+        //console.log(JSON.stringify(result));
+
+        if (result.error) {
+            return false;
+        }
+        return result.authorized;
+    }
+    async getAccountState(id) {
+        var endpoint = (await this.getApiEnabled('/service/accountstate/', "_account_state")) +
+            '/service/accountstate/get';
+
+        if (id.length >= 13) {
+            endpoint += '?key=' + id;
+        }
+        else {
+            endpoint += '?name=' + id;
+        }
+
+        var result = await requests.get(endpoint);
+        if (result.error) {
+            return null;
+        }
+        return result;
+    }
+    async saveAccountState(account) {
+        var endpoint = (await this.getApiEnabled('/service/accountstate/', "_account_state")) +
+            '/service/accountstate/save';
+
+        var result = await requests.post(endpoint, { value: JSON.stringify(account) });
+        return result;
+    }
+    async anonymousPost(post) {
+        var endpoint = (await this.getApiEnabled('/service/anon/', "_anonymous_post")) +
+            '/service/anon/post';
 
         var result = await requests.post(endpoint, post);
         return result;
